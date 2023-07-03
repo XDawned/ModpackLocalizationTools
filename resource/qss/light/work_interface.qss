@@ -1,0 +1,13 @@
+ScrollArea {
+    border: none;
+    background-color: transparent;
+}
+#fileBrowser{
+    border: none;
+}
+#transLog{
+    color: rgb(118, 118, 118);
+    font: 10px 'Segoe UI', 'Microsoft YaHei';
+    background-color: rgb(240, 240, 240);
+}
+
