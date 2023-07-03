@@ -8,8 +8,8 @@
     <a href="https://github.com/Tryanks/python-snbtlib">
         <img src="https://img.shields.io/badge/lib-snbtlib-brightgreen" alt="lib">
     </a>
-    <a href="https://github.com/XDawned/ModpackLocalizationTools/releases/latest">
-        <img src="https://img.shields.io/badge/releases-v1.0.0" alt="releases">
+    <a href="https://github.com/XDawned/ModpackLocalizationTools/releases/tag/v1.0.0">
+        <img src="https://img.shields.io/badge/releases-1.0-blue" alt="releases">
     </a>
 
 # 整合包本地化工具
