@@ -197,8 +197,13 @@ class ProcessThread(QThread):
                             break
                         source_file = os.path.join(root, file)
                         relative_path = os.path.relpath(source_file, self.work_folder)
-                        destination_file = os.path.join(self.work_folder, 'resourcepacks', 'assets',
-                                                        relative_path)
+                        # 检查相对路径是否正确
+                        des_relative_path = relative_path.split('\\')
+                        if len(des_relative_path) > 3:
+                            des_relative_path = '\\'.join(des_relative_path[-3:])
+                        else:
+                            des_relative_path = relative_path
+                        destination_file = os.path.join(self.work_folder, 'resourcepacks', 'assets', des_relative_path)
                         os.makedirs(os.path.dirname(destination_file), exist_ok=True)
                         shutil.copy(source_file, destination_file)
             # 将pack.mcmeta写入资源包
