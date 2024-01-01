@@ -18,7 +18,7 @@ from view.generate_resourcepack_interface import GenerateResourcepackInterface
 from view.modpack_extract_interface import ModpackExtractInterface
 from view.setting_interface import SettingInterface
 from view.work_interface import WorkInterface
-
+from resource import resource
 
 class StackedWidget(QFrame):
     currentWidgetChanged = pyqtSignal(QWidget)

@@ -41,7 +41,7 @@ class Config(QConfig):
 
 YEAR = 2023
 AUTHOR = "XDawned"
-VERSION = 'v1.0.0'
+VERSION = 'v1.1.0'
 HELP_URL = "https://github.com/XDawned"
 REPO_URL = "https://github.com/XDawned"
 EXAMPLE_URL = "https://github.com/XDawned"
