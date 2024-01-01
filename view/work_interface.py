@@ -2,8 +2,8 @@
 import os
 
 from PyQt5.QtCore import Qt, QUrl
-from PyQt5.QtGui import QDesktopServices
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
+from PyQt5.QtGui import QDesktopServices, QKeySequence
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QShortcut
 from qfluentwidgets import ScrollArea, InfoBar, RoundMenu, Action, FluentIcon, DropDownPushButton, StateToolTip, \
     ProgressBar, TextEdit, MessageBox, InfoBarPosition
 
@@ -23,6 +23,7 @@ class WorkInterface(ScrollArea):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.ext = None
+        self.first_update_flag = True
         self.data = [
             ['', '你可以在左侧工作区域内选择json格式的语言文件，双击读取并编辑', '', ''],
             ['', '需要注意的是你只能编辑译文', '', ''],
@@ -67,23 +68,42 @@ class WorkInterface(ScrollArea):
         self.menu_extra = RoundMenu(parent=self)
 
         self.action_trans_start = Action(FluentIcon.SEND_FILL, '开始机翻')
+        self.action_trans_start.setShortcut('F1')
         self.action_trans_stop = Action(FluentIcon.CLOSE, '终止机翻')
-        self.action_save_cache = Action(FluentIcon.PIN, '保存进度')
+        self.action_trans_stop.setShortcut('F2')
         self.action_save_lang = Action(FluentIcon.SAVE, '保存')
+        self.action_save_lang.setShortcut('F3')
+        self.action_save_lang_as = Action(FluentIcon.SAVE_AS, '另存为')
+        self.action_save_lang_as.setShortcut('F4')
+        self.action_save_cache = Action(FluentIcon.PIN, '保存进度')
+        self.action_save_cache.setShortcut('F5')
         self.action_migrate = Action(FluentIcon.HISTORY, '从旧版本迁移')
+
+        shortcut1 = QShortcut(QKeySequence("F1"), self.view)
+        shortcut2 = QShortcut(QKeySequence("F2"), self.view)
+        shortcut3 = QShortcut(QKeySequence("F3"), self.view)
+        shortcut4 = QShortcut(QKeySequence("F4"), self.view)
+        shortcut5 = QShortcut(QKeySequence("F5"), self.view)
+        shortcut1.activated.connect(self.handle_translate_start)
+        shortcut2.activated.connect(self.handle_translate_stop)
+        shortcut3.activated.connect(self.handle_save)
+        shortcut4.activated.connect(self.handle_save_as)
+        shortcut5.activated.connect(self.handle_save_cache)
 
         self.action_trans_start.triggered.connect(self.handle_translate_start)
         self.action_trans_start.triggered.connect(self.__checkUpdate)
         self.action_trans_stop.triggered.connect(self.handle_translate_stop)
         self.action_save_cache.triggered.connect(self.handle_save_cache)
-        self.action_save_lang.triggered.connect(self.handle_save_lang)
+        self.action_save_lang.triggered.connect(self.handle_save)
+        self.action_save_lang_as.triggered.connect(self.handle_save_as)
         self.action_migrate.triggered.connect(self.handle_migrate)
 
         self.menu_trans.addAction(self.action_trans_start)
         self.menu_trans.addAction(self.action_trans_stop)
         self.menu_trans.addAction(self.action_migrate)
-        self.menu_save.addAction(self.action_save_cache)
         self.menu_save.addAction(self.action_save_lang)
+        self.menu_save.addAction(self.action_save_lang_as)
+        self.menu_save.addAction(self.action_save_cache)
 
         self.dropDownPushButton_save = DropDownPushButton('保存', self, FluentIcon.SAVE)
         self.dropDownPushButton_trans = DropDownPushButton('预翻译', self, FluentIcon.BASKETBALL)
@@ -104,6 +124,8 @@ class WorkInterface(ScrollArea):
         self.transLog.setStyleSheet('background-color: transparent;border:none')
         self.transLog.setFixedSize(280, 320)
         self.transLog.setReadOnly(True)
+        self.transLog.setPlainText(f'快捷键：\nCtrl+W-开始编辑\nEsc退出编辑\nCtrl+A上一个\nCtrl+D下一'
+                                   f'个\nF1/F2-开始/停止机翻\nF3/F4-保存/另存为')
         self.searchDictInterface.setFixedHeight(400)
         self.searchLayout.addWidget(self.searchDictInterface)
         # self.searchLayout.addWidget(self.searchCacheInterface)
@@ -122,7 +144,8 @@ class WorkInterface(ScrollArea):
         StyleSheet.WORK_INTERFACE.apply(self)
 
     def __checkUpdate(self):
-        if update_checker.need_update and cfg.get(cfg.checkUpdateAtStartUp):
+        if self.first_update_flag and update_checker.need_update and cfg.get(cfg.checkUpdateAtStartUp):
+            self.first_update_flag = False
             title = self.tr('检测到新版本:%s' % update_checker.latest_version)
             content = self.tr('更新日志：%s\n' % update_checker.logs)
             w = MessageBox(title, content, self.window())
@@ -275,22 +298,36 @@ class WorkInterface(ScrollArea):
                 parent=self
             )
 
-    def handle_save_lang(self):
+    def handle_save_as(self):
         if self.ext == '.snbt':
             prefix_path = os.path.dirname(self.quest.input_path) + '/回填后文件'
             os.makedirs(prefix_path) if not os.path.exists(prefix_path) else None
             folder, _ = QFileDialog.getSaveFileName(self, "保存文件", prefix_path + '/' + self.quest.prefix
                                                     , "SNBT 文件 (*.snbt);;所有文件 (*)")
         else:
-            folder, _ = QFileDialog.getSaveFileName(self, "保存文件", os.path.dirname(self.lang.file_path) + '/zh_cn'
-                                                    , "JSON 文件 (*.json);;LANG 文件 (*.lang);;所有文件 (*)")
-        if folder:
+            original_path = os.path.dirname(self.lang.file_path) + '/zh_cn' if 'en' in self.lang.file_path else '/zh_CN'
+            file_type = 'JSON 文件 (*.json);;' if 'json' in self.lang.file_path else 'LANG 文件 (*.lang);;'
+            folder, _ = QFileDialog.getSaveFileName(self, "保存文件", original_path, f"{file_type}所有文件 (*)")
+
+    def handle_save(self):
+        if self.ext == '.snbt':
+            prefix_path = os.path.dirname(self.quest.input_path) + '/回填后文件'
+            os.makedirs(prefix_path) if not os.path.exists(prefix_path) else None
+            folder = f"{prefix_path}/{self.quest.prefix}.snbt"
+        else:
+            folder = self.lang.file_path.replace('en_us.', 'zh_cn.')
+            folder = folder.replace('en_US.', 'zh_CN.')
+        self.save_lang_file(folder)
+
+
+    def save_lang_file(self, path: str):
+        if path:
             try:
                 data = {row[0]: row[2] for row in self.lang.lang_bilingual_list if row[2] != ''}
                 if self.ext != '.snbt':
-                    save_lang_file(data, folder)
+                    save_lang_file(data, path)
                 else:
-                    save_lang_file(data, folder, self.quest.backFill(data))
+                    save_lang_file(data, path, self.quest.backFill(data))
             except Exception as e:
                 InfoBar.error(
                     self.tr('保存失败'),
@@ -301,7 +338,7 @@ class WorkInterface(ScrollArea):
             else:
                 InfoBar.success(
                     self.tr('保存成功'),
-                    self.tr('已保存于:%s' % folder),
+                    self.tr('已保存于:%s' % path),
                     duration=10000,
                     parent=self
                 )

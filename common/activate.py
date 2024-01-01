@@ -2,7 +2,11 @@ class Activate:
     activate = False
     activateInfo = ''
 
-    # 不予公开
+    def __init__(self):
+        self.check()
+
+    def check(self):
+        self.activate = True
 
 
 activate = Activate()

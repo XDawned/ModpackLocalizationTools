@@ -11,10 +11,11 @@ from pathlib import Path
 import requests
 import snbtlib
 from PyQt5.QtCore import QThread, pyqtSignal, QObject
+from transformers import MarianTokenizer, MarianMTModel
 
 from common.config import cfg
 
-MAGIC_WORD = r'XDawned'  # 先在术语库中记录，保证其不被翻译
+MAGIC_WORD = r'{xdawned}'  # 先在术语库中记录，保证其不被翻译
 
 
 def parse_json_file(path):
@@ -116,6 +117,7 @@ class FTBQuest:
     low = False
 
     def __init__(self, p: str):
+        self.lang = {}
         self.input_path = Path(p)
         self.prefix = '' + list(self.input_path.parts)[-1].replace('.snbt', '')
         with open(p, 'r', encoding="utf-8") as fin:
@@ -132,12 +134,11 @@ class FTBQuest:
                 sys.exit(0)
 
     def check_low(self):
-        lines = self.text.split('\n')
-        for line in lines:
-            if line.endswith(',') and not line.endswith('{'):
-                return True
-            else:
-                return False
+        match = re.search(r',\n(?!")', self.text)
+        if match:
+            return True
+        else:
+            return False
 
     def dumps(self, dic: dict):
         quest_local_text = snbtlib.dumps(dic, compact=self.low)
@@ -303,10 +304,10 @@ class BetterQuest:
             key_value = {}
         for key in dictionary.keys():
             if isinstance(dictionary[key], dict):
-                dictionary_, key_value, name_index, desc_index = self.traverse_trans(dictionary[key], key_value
-                                                                                     , name_index, desc_index)
+
                 dictionary[key] = dictionary_
             else:
+                dictionary_, key_value, name_index, desc_index = self.traverse_trans(dictionary[key], key_value, name_index, desc_index)
                 if dictionary[key] == "":
                     continue
                 elif key.find('name:') != -1:
@@ -431,12 +432,8 @@ class Translator(QObject):
         return self.post_process(text_, translated_text, original)
 
     def init_local_model(self):
-        try:
-            from transformers import MarianTokenizer, MarianMTModel
-            self.model = MarianMTModel.from_pretrained("XDawned/minecraft-en-zh")
-            self.tokenizer = MarianTokenizer.from_pretrained("XDawned/minecraft-en-zh")
-        except Exception as e:
-            return [str(e)]
+        self.model = MarianMTModel.from_pretrained("./models/minecraft-en-zh")
+        self.tokenizer = MarianTokenizer.from_pretrained("./models/minecraft-en-zh")
 
     def localTranslate(self, text_: str, original=False):
         text_process = self.pre_process(text_)
@@ -508,10 +505,7 @@ class Lang:
         self.lang_bilingual_list = []
 
     def read_lang(self, file_path: str, cache: bool = False):
-        self.lang_dic = {}
-        self.lang_bilingual_list = []
-        self.cache_dic = {}
-        self.cache_name = ''
+        self.__init__()
         self.cache_folder = cfg.get(cfg.cacheFolder)
         self.file_path = file_path
         # 读取数据
@@ -533,6 +527,7 @@ class Lang:
         self.init_bilingual()
 
     def set_lang(self, data: dict):
+        self.__init__()
         self.lang_dic = data
         self.init_bilingual()
 
@@ -627,7 +622,3 @@ class ResourcePack:
                         mod = match1.group(1)
                         if mod not in self.mods:
                             self.mods.append(mod)
-    # def update_data(self, data):
-    #     self.lang = data
-    #     self.cache_dic = {row[0]: row[2] for row in self.lang if row[2] != ''}
-    #     save_json_file(self.cache_dic, self.cache_folder + '/' + self.cache_name)

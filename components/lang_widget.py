@@ -2,9 +2,9 @@
 from pathlib import Path
 
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QKeySequence
 from PyQt5.QtWidgets import QVBoxLayout, QWidget, QTableWidgetItem, QHBoxLayout, QFrame, QLabel, \
-    QSpacerItem, QSizePolicy
+    QSpacerItem, QSizePolicy, QShortcut
 from qfluentwidgets import TableWidget, TextEdit, PushButton, SearchLineEdit, LineEdit, ScrollArea, ExpandLayout, \
     FluentIcon
 
@@ -66,9 +66,6 @@ class BrowseLangWidget(Frame):
                     item.setFont(QFont("Segoe UI", 12, QFont.Bold))
                 else:
                     item.setFont(QFont("SimSun", 10))
-                    # font = item.font()
-                    # print(font.family())
-                    # print(font.pointSize())
 
     def handle_item_clicked(self, item):
         self.doubleClicked.emit(item.row())
@@ -134,9 +131,16 @@ class ReviewLangWidget(ScrollArea):
         self.text_edit_ori = TextEdit(self.scrollWidget)
         self.text_edit_ori.setReadOnly(True)
         self.text_edit_trans = TextEdit(self.scrollWidget)
-        self.text_edit_trans.textChanged.connect(self.handleTextChanged)
+
         self.text_edit_ori.setFixedHeight(100)
         self.text_edit_trans.setFixedHeight(100)
+
+        shortcut_edit = QShortcut(QKeySequence("Ctrl+Return"), self)
+        shortcut_cancel = QShortcut(QKeySequence("Esc"), self)
+        self.text_edit_trans.textChanged.connect(self.handleTextChanged)
+        shortcut_edit.activated.connect(self.text_edit_trans.setFocus)
+        shortcut_cancel.activated.connect(self.text_edit_trans.clearFocus)
+
         self.label_key = QLabel('键值', self.scrollWidget)
         label2 = QLabel('原文', self.scrollWidget)
         label3 = QLabel('译文', self.scrollWidget)
@@ -150,11 +154,16 @@ class ReviewLangWidget(ScrollArea):
         button_layout = QHBoxLayout()
         button_layout.setSpacing(0)
         prev_button = PushButton('<', button_box)
+        shortcut_prev_button = QShortcut(QKeySequence("Ctrl+A"), self)
+        self.text_edit_trans.textChanged.connect(self.handleTextChanged)
         prev_button.setFixedHeight(40)
         prev_button.clicked.connect(self.prev_data)
+        shortcut_prev_button.activated.connect(self.prev_data)
         next_button = PushButton('>', button_box)
+        shortcut_next_button = QShortcut(QKeySequence("Ctrl+D"), self)
         next_button.setFixedHeight(40)
         next_button.clicked.connect(self.next_data)
+        shortcut_next_button.activated.connect(self.prev_data)
         button_layout.addWidget(prev_button)
         self.jump_index_edit = LineEdit(button_box)
         self.jump_index_edit.setFixedSize(65, 40)
@@ -250,25 +259,26 @@ class ReviewLangWidget(ScrollArea):
 
     def update_suggest_card(self):  # 更新翻译建议
         self.suggestPanel.removeAllCard()
-        # 记忆库
-        for key, value in self.all_cache_dic.items():
-            ori = self.data_array[self.current_index][1]
-            if ori == self.all_cache_dic[key]['ori']:
-                trans = self.all_cache_dic[key]['trans']
-                self.suggestPanel.addCard(author='记忆库检索', trans=trans, ori=ori, icon=FluentIcon.PIN)
-        # 机翻
-        current_trans = self.data_array[self.current_index][3]
-        if current_trans:
-            ori = self.data_array[self.current_index][1]
-            trans = current_trans
-            api = cfg.get(cfg.translateApi)
-            if api == '0':
-                api = '百度翻译'
-            elif api == '1':
-                api = '离线翻译'
-            else:
-                api = 'ChatGPT'
-            self.suggestPanel.addCard(author=api, trans=trans, ori=ori, icon=FluentIcon.GLOBE)
+        if self.data_array:
+            # 记忆库
+            for key, value in self.all_cache_dic.items():
+                ori = self.data_array[self.current_index][1]
+                if ori == self.all_cache_dic[key]['ori']:
+                    trans = self.all_cache_dic[key]['trans']
+                    self.suggestPanel.addCard(author='记忆库检索', trans=trans, ori=ori, icon=FluentIcon.PIN)
+            # 机翻
+            current_trans = self.data_array[self.current_index][3]
+            if current_trans:
+                ori = self.data_array[self.current_index][1]
+                trans = current_trans
+                api = cfg.get(cfg.translateApi)
+                if api == '0':
+                    api = '百度翻译'
+                elif api == '1':
+                    api = '离线翻译'
+                else:
+                    api = 'ChatGPT'
+                self.suggestPanel.addCard(author=api, trans=trans, ori=ori, icon=FluentIcon.GLOBE)
 
     def get_all_cache_dic(self):
         for path in Path(cfg.get(cfg.cacheFolder)).rglob("*.json"):

@@ -1,6 +1,7 @@
 # coding:utf-8
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QApplication, QTreeWidgetItem
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QApplication, QTreeWidgetItem, QShortcut
 from qfluentwidgets import (ScrollArea, SearchLineEdit, InfoBar, TreeWidget)
 
 from common.style_sheet import StyleSheet
@@ -18,6 +19,10 @@ class SearchDictInterface(ScrollArea):
         self.lineEdit.searchSignal.connect(self.handle_search)
         self.lineEdit.setPlaceholderText('术语检索')
         self.lineEdit.returnPressed.connect(self.handle_search)
+
+        # 绑定快捷键
+        shortcut_edit = QShortcut(QKeySequence("Ctrl+/"), self)
+        shortcut_edit.activated.connect(self.lineEdit.setFocus)
 
         self.tree = TreeWidget(self.view)
         self.setStyleSheet('font-size: 10px;border-top: none;border-right: none')

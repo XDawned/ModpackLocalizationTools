@@ -3,8 +3,9 @@ import json
 import os.path
 
 from PyQt5.QtCore import Qt, pyqtSignal, QFile
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QVBoxLayout, QFileSystemModel, QLabel, QFileDialog, \
-    QItemDelegate, QCheckBox, QScrollArea, QInputDialog
+    QItemDelegate, QCheckBox, QScrollArea, QInputDialog, QShortcut
 from qfluentwidgets import FluentIcon as FIF
 from qfluentwidgets import TreeView, Action, RoundMenu, MessageBox, LineEdit, InfoBar, \
     InfoBarPosition
@@ -67,6 +68,11 @@ class FileBrowser(QScrollArea):
         # delegate = CheckBoxDelegate()
         # self.tree_view.setItemDelegate(delegate)
 
+        # 添加快捷键
+        shortcut_previous_file = QShortcut(QKeySequence("Ctrl+W"), self.tree_view)
+        shortcut_next_file = QShortcut(QKeySequence("Ctrl+S"), self.tree_view)
+        shortcut_previous_file.activated.connect(lambda: self.handle_select_file(-1))
+        shortcut_next_file.activated.connect(lambda: self.handle_select_file(1))
         # 添加右键菜单
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.show_context_menu)
@@ -299,5 +305,12 @@ class FileBrowser(QScrollArea):
         file_path = self.model.filePath(Qmodelidx)
         if os.path.isfile(file_path):
             self.chooseFile.emit(file_path)
-        # print(self.model.fileName(Qmodelidx))
-        # print(self.model.fileInfo(Qmodelidx))
+
+    def handle_select_file(self, step:int):
+        index = self.tree_view.currentIndex()
+        new_index = index.sibling(index.row() + step, index.column())
+        if new_index.isValid():
+            file_path = self.model.filePath(new_index)
+            if os.path.isfile(file_path):
+                self.tree_view.setCurrentIndex(new_index)
+                self.tree_clicked(new_index)
