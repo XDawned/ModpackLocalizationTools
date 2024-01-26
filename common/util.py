@@ -8,6 +8,7 @@ import time
 import zipfile
 from pathlib import Path
 
+import ahocorasick
 import requests
 import snbtlib
 from PyQt5.QtCore import QThread, pyqtSignal, QObject
@@ -307,7 +308,8 @@ class BetterQuest:
 
                 dictionary[key] = dictionary_
             else:
-                dictionary_, key_value, name_index, desc_index = self.traverse_trans(dictionary[key], key_value, name_index, desc_index)
+                dictionary_, key_value, name_index, desc_index = self.traverse_trans(dictionary[key], key_value,
+                                                                                     name_index, desc_index)
                 if dictionary[key] == "":
                     continue
                 elif key.find('name:') != -1:
@@ -622,3 +624,24 @@ class ResourcePack:
                         mod = match1.group(1)
                         if mod not in self.mods:
                             self.mods.append(mod)
+
+
+class ACA:
+    aca = ahocorasick.Automaton()
+
+    def __init__(self):
+        data = parse_json_file('./common/Dict-Mini.json')
+        for k, v in data.items():
+            k = k.lower()  # 统一大小写
+            if len(k) > 3:  # 排除长度小于3的词汇
+                self.aca.add_word(k, (k, v))
+        self.aca.make_automaton()
+
+    def find(self, word: str) -> list:
+        res = []
+        word = word.lower()
+        for item in self.aca.iter(word):
+            res.append(item)
+        if res:
+            res.sort(key=lambda i: len(i[1][0]), reverse=True)  # 按匹配到术语的长度递减排序
+        return res[:5]

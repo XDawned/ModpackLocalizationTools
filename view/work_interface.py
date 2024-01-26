@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSho
 from qfluentwidgets import ScrollArea, InfoBar, RoundMenu, Action, FluentIcon, DropDownPushButton, StateToolTip, \
     ProgressBar, TextEdit, MessageBox, InfoBarPosition
 
-from common.activate import activate
 from common.config import cfg
 from common.style_sheet import StyleSheet
 from common.update_checker import update_checker
@@ -124,8 +123,9 @@ class WorkInterface(ScrollArea):
         self.transLog.setStyleSheet('background-color: transparent;border:none')
         self.transLog.setFixedSize(280, 320)
         self.transLog.setReadOnly(True)
-        self.transLog.setPlainText(f'快捷键：\nCtrl+W-开始编辑\nEsc退出编辑\nCtrl+A上一个\nCtrl+D下一'
-                                   f'个\nF1/F2-开始/停止机翻\nF3/F4-保存/另存为')
+        self.transLog.setPlainText(f'快捷键：\nCtrl+A-上一条\nCtrl+D-下一条\nCtrl+W上个文件\nCtrl+S下'
+                                   f'个文件\nCtrl+Enter开始编辑\nEsc退出编辑\n\nCtrl+?搜索离线词典\n\nF1/F2-开始'
+                                   f'/停止机翻\nF3/F4-保存/另存为')
         self.searchDictInterface.setFixedHeight(400)
         self.searchLayout.addWidget(self.searchDictInterface)
         # self.searchLayout.addWidget(self.searchCacheInterface)
@@ -216,19 +216,19 @@ class WorkInterface(ScrollArea):
 
     def handle_translate_start(self):
         keepOriginal = cfg.get(cfg.keepOriginal)
-        if not cfg.get(cfg.keepOriginal):
-            if not activate.activate:
-                keepOriginal = False
-                InfoBar.warning(
-                    title=self.tr('你的配置貌似有些问题'),
-                    content=self.tr("不用担心，我会已经帮你修正了😊"),
-                    orient=Qt.Horizontal,
-                    isClosable=False,  # disable close button
-                    position=InfoBarPosition.TOP_LEFT,
-                    duration=2000,
-                    parent=self
-                )
-            cfg.set(cfg.keepOriginal, True)
+        # if not cfg.get(cfg.keepOriginal):
+        #     if not activate.activate:
+        #         keepOriginal = False
+        #         InfoBar.warning(
+        #             title=self.tr('你的配置貌似有些问题'),
+        #             content=self.tr("不用担心，我会已经帮你修正了😊"),
+        #             orient=Qt.Horizontal,
+        #             isClosable=False,  # disable close button
+        #             position=InfoBarPosition.TOP_LEFT,
+        #             duration=2000,
+        #             parent=self
+        #         )
+        #     cfg.set(cfg.keepOriginal, True)
 
         self.translator_thread = LangTranslatorThread(self.lang.lang_bilingual_list, 'en', 'zh', cfg.get(cfg.appKey),
                                                       cfg.get(cfg.appSecret), keepOriginal)
@@ -318,7 +318,6 @@ class WorkInterface(ScrollArea):
             folder = self.lang.file_path.replace('en_us.', 'zh_cn.')
             folder = folder.replace('en_US.', 'zh_CN.')
         self.save_lang_file(folder)
-
 
     def save_lang_file(self, path: str):
         if path:

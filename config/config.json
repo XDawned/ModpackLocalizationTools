@@ -10,7 +10,7 @@
     "Folders": {
         "CacheFolder": "D:/game/MC/MC-Develop/FTBQLocalizationTools-old/cache",
         "SaveFolder": "D:/game/MC/MC-Develop/FTBQLocalizationTools-old/gui/save",
-        "WorkFolder": "D:/game/MC/MC-Develop/FTBQLocalizationTools-old/work"
+        "WorkFolder": "D:/Coding/Project/FTBQLocalizationTools/dist/FTBQ本地化工具-v1.4.6/ftbquests"
     },
     "Update": {
         "UpdateAtStartUp": true
@@ -31,7 +31,7 @@
         "LowVersionLangFormat": false
     },
     "QFluentWidgets": {
-        "ThemeColor": "#ffaa2963",
+        "ThemeColor": "#ff009faa",
         "ThemeMode": "Light"
     }
 }

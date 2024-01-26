@@ -93,6 +93,8 @@ class SearchCacheInterface(ScrollArea):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
+        self.term_dict = parse_json_file('./common/Dict-Mini.json')
+
         self.setFixedWidth(300)
         self.view = QWidget(self)
         self.vBoxLayout = QVBoxLayout()
@@ -137,9 +139,8 @@ class SearchCacheInterface(ScrollArea):
         self.tree.expandAll()
 
     def handle_search(self):
-        term_dict = parse_json_file('./common/Dict-Mini.json')
         term = self.lineEdit.text()
-        result = find_similar_terms(term, term_dict)
+        result = find_similar_terms(term, self.term_dict)
         if result:
             self.update_table(result)
         else:

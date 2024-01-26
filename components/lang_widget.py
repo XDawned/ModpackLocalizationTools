@@ -1,4 +1,5 @@
 # coding: utf-8
+import threading
 from pathlib import Path
 
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -10,7 +11,7 @@ from qfluentwidgets import TableWidget, TextEdit, PushButton, SearchLineEdit, Li
 
 from common.config import cfg
 from common.style_sheet import StyleSheet
-from common.util import merge_dicts, parse_json_file
+from common.util import merge_dicts, parse_json_file, ACA
 from components.link_card import SuggestCardWidget
 
 
@@ -116,6 +117,7 @@ class ReviewLangWidget(ScrollArea):
         self.current_index = 0
         self.str_count_all = 0
         self.translator_thread = None
+        self.aca = ACA()
 
         self.init_ui()
 
@@ -261,15 +263,14 @@ class ReviewLangWidget(ScrollArea):
         self.suggestPanel.removeAllCard()
         if self.data_array:
             # 记忆库
+            ori = self.data_array[self.current_index][1]
             for key, value in self.all_cache_dic.items():
-                ori = self.data_array[self.current_index][1]
                 if ori == self.all_cache_dic[key]['ori']:
                     trans = self.all_cache_dic[key]['trans']
                     self.suggestPanel.addCard(author='记忆库检索', trans=trans, ori=ori, icon=FluentIcon.PIN)
             # 机翻
             current_trans = self.data_array[self.current_index][3]
             if current_trans:
-                ori = self.data_array[self.current_index][1]
                 trans = current_trans
                 api = cfg.get(cfg.translateApi)
                 if api == '0':
@@ -279,6 +280,11 @@ class ReviewLangWidget(ScrollArea):
                 else:
                     api = 'ChatGPT'
                 self.suggestPanel.addCard(author=api, trans=trans, ori=ori, icon=FluentIcon.GLOBE)
+            # 术语词典
+            term_search = self.aca.find(ori)
+            if term_search:
+                for term in term_search:
+                    self.suggestPanel.addCard(author='术语库', trans='|'.join(term[1][1]), ori=term[1][0], icon=FluentIcon.HELP)
 
     def get_all_cache_dic(self):
         for path in Path(cfg.get(cfg.cacheFolder)).rglob("*.json"):
