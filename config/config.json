@@ -8,9 +8,9 @@
         "TranslateApi": "1"
     },
     "Folders": {
-        "CacheFolder": "D:/game/MC/MC-Develop/FTBQLocalizationTools-old/cache",
-        "SaveFolder": "D:/game/MC/MC-Develop/FTBQLocalizationTools-old/gui/save",
-        "WorkFolder": "D:/Coding/Project/FTBQLocalizationTools/dist/FTBQ本地化工具-v1.4.6/ftbquests"
+        "CacheFolder": ".",
+        "SaveFolder": ".",
+        "WorkFolder": "."
     },
     "Update": {
         "UpdateAtStartUp": true
