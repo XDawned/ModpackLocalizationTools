@@ -2,7 +2,7 @@
 import json
 import os.path
 
-from PyQt5.QtCore import Qt, pyqtSignal, QFile
+from PyQt5.QtCore import Qt, pyqtSignal, QFile, QDir
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QVBoxLayout, QFileSystemModel, QLabel, QFileDialog, \
     QItemDelegate, QCheckBox, QScrollArea, QInputDialog, QShortcut
@@ -43,15 +43,16 @@ class FileBrowser(QScrollArea):
         # 垂直布局
         self.v_box_layout = QVBoxLayout(self)
         # 控件
-        self.label1 = QLabel('当前目录(点击下方地址切换)', self)
-        self.label2 = QLabel(folder, self)
-        self.label2.setWordWrap(True)
-        self.label2.mousePressEvent = self.onLabel2Clicked
+        self.label_choose_project_tip = QLabel('当前目录(点击下方地址切换)', self)
+        self.label_choose_project = QLabel(folder, self)
+        self.label_choose_project.setWordWrap(True)
+        self.label_choose_project.mousePressEvent = self.on_choose_project_label_clicked
         self.model = QFileSystemModel()
         self.model.setRootPath(folder)
         # 过滤
-        # self.model.setNameFilters(['*.snbt', '*.json', ])
-        self.model.setNameFilterDisables(False)
+        # self.model.setFilter(QDir.QF)
+        # self.model.setNameFilters(['*.snbt', '*.json', '*.nbt', '*.lang'])
+        # self.model.setNameFilterDisables(False)
         # 展示
         self.tree_view = TreeView(self)
         self.tree_view.setModel(self.model)
@@ -61,9 +62,12 @@ class FileBrowser(QScrollArea):
         self.tree_view.hideColumn(3)
         self.tree_view.setRootIndex(self.model.index(folder))
 
-        self.v_box_layout.addWidget(self.label1)
-        self.v_box_layout.addWidget(self.label2)
+        self.on_choose_project_label_clicked(1)
+
+        self.v_box_layout.addWidget(self.label_choose_project_tip)
+        self.v_box_layout.addWidget(self.label_choose_project)
         self.v_box_layout.addWidget(self.tree_view)
+
         # 设置 CheckboxDelegate 为 delegate
         # delegate = CheckBoxDelegate()
         # self.tree_view.setItemDelegate(delegate)
@@ -103,8 +107,8 @@ class FileBrowser(QScrollArea):
         self.tree_view.doubleClicked.connect(self.tree_clicked)
         # 应用qss
         self.tree_view.setObjectName('treeView')
-        self.label1.setObjectName('label1')
-        self.label2.setObjectName('label2')
+        self.label_choose_project_tip.setObjectName('label1')
+        self.label_choose_project.setObjectName('label2')
         StyleSheet.FILE_BROWSER.apply(self)
 
     def show_context_menu(self, point):
@@ -287,26 +291,35 @@ class FileBrowser(QScrollArea):
                     parent=self.parent()
                 )
 
-    def onLabel2Clicked(self, t):
+    def on_choose_project_label_clicked(self, t):
         folder = QFileDialog.getExistingDirectory(
-            self, self.tr("请选择目录"), "./")
-        if not folder or cfg.get(self.configItem) == folder:
+            self, self.tr("请选择工作目录(存放待翻译的文件)"), "./")
+        if not folder:
             return
         cfg.set(self.configItem, folder)
-        self.freshFileBrowser()
+        self.fresh_file_browser()
+        self.check_project_config(folder)
 
-    def freshFileBrowser(self):
+    @staticmethod
+    def check_project_config(folder):
+        # 生成项目配置文件目录
+        project_config_path = f'{folder}/.mplt'
+        if not os.path.exists(project_config_path):
+            os.mkdir(project_config_path)
+
+    def fresh_file_browser(self):
         folder = cfg.get(self.configItem)
-        self.label2.setText(folder)
+        self.label_choose_project.setText(folder)
         self.model.setRootPath(folder)
         self.tree_view.setRootIndex(self.model.index(folder))
+        self.tree_view.setRowHidden(0, self.model.index(folder), True)
 
     def tree_clicked(self, Qmodelidx):
         file_path = self.model.filePath(Qmodelidx)
         if os.path.isfile(file_path):
             self.chooseFile.emit(file_path)
 
-    def handle_select_file(self, step:int):
+    def handle_select_file(self, step: int):
         index = self.tree_view.currentIndex()
         new_index = index.sibling(index.row() + step, index.column())
         if new_index.isValid():

@@ -39,9 +39,9 @@ class Config(QConfig):
     iconPath = ConfigItem("Meta", "Icon", "./work/pack.png")
 
 
-YEAR = 2023
+YEAR = 2024
 AUTHOR = "XDawned"
-VERSION = 'v1.1.0'
+VERSION = 'v1.2.0'
 HELP_URL = "https://github.com/XDawned"
 REPO_URL = "https://github.com/XDawned"
 EXAMPLE_URL = "https://github.com/XDawned"

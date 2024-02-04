@@ -508,7 +508,7 @@ class Lang:
 
     def read_lang(self, file_path: str, cache: bool = False):
         self.__init__()
-        self.cache_folder = cfg.get(cfg.cacheFolder)
+        self.cache_folder = f"{cfg.get(cfg.workFolder)}/.mplt/cache"
         self.file_path = file_path
         # 读取数据
         # 兼容lang或json类型语言文件
@@ -540,6 +540,8 @@ class Lang:
         else:
             self.cache_name = encode_to_MD5(self.file_path) + '.json'
         self.cache_file_path = self.cache_folder + '/' + self.cache_name
+        if not os.path.exists(self.cache_folder):
+            os.mkdir(self.cache_folder)
         if check_file_exists(self.cache_folder, self.cache_name) is not None:
             self.cache_dic = parse_json_file(self.cache_file_path)
         else:
