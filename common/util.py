@@ -1,11 +1,12 @@
+import copy
 import difflib
 import hashlib
 import json
 import os
 import re
-import sys
 import time
 import zipfile
+from collections import OrderedDict
 from pathlib import Path
 
 import ahocorasick
@@ -13,6 +14,7 @@ import requests
 import snbtlib
 from PyQt5.QtCore import QThread, pyqtSignal, QObject
 from transformers import MarianTokenizer, MarianMTModel
+from nbt import nbt
 
 from common.config import cfg
 
@@ -92,7 +94,7 @@ def get_if_folder_exists(directory, target_folder):
     return None
 
 
-def encode_to_MD5(filepath):
+def encode_to_md5(filepath):
     print(filepath)
     stat = os.stat(filepath)
     size = stat.st_size
@@ -108,181 +110,194 @@ def find_similar_terms(term, term_dict):
     return similar_terms
 
 
+class Lang:
+    lang = None
+    file_path = ''
+    cache_dic = {}
+    cache_name = ''
+    cache_folder = ''
+    cache_file_path = ''
+    lang_bilingual_list = []
+
+    def __init__(self, lang: dict = None):
+        self.lang = lang
+
+    def read_lang(self, file_path: str, cache: bool = False):
+        self.__init__()
+        self.cache_folder = f"{cfg.get(cfg.workFolder)}/.mplt/cache"
+        self.file_path = file_path
+        # 读取数据
+        # 兼容lang或json类型语言文件
+        if file_path.endswith('.lang'):
+            with open(self.file_path, 'r', encoding='utf-8') as f:
+                lang_data = f.read()
+                # 清理注释
+                lang_data = '\n'.join(line for line in lang_data.split('\n') if not line.strip().startswith("#"))
+                # 分割键值对
+                lang_data = [line.strip() for line in lang_data.split('\n') if line.strip()]
+                for line in lang_data:
+                    key, value = line.split("=", maxsplit=1)
+                    self.lang[key.strip()] = value.strip()
+        elif file_path.endswith('.json'):
+            self.lang = parse_json_file(file_path)
+        if cache:
+            self.init_cache()
+        self.init_bilingual()
+
+    def set_lang(self, data: dict):
+        self.__init__()
+        self.lang = data
+        self.init_bilingual()
+
+    def init_cache(self, cache_name: str = None, cache_folder: str = None):
+        if cache_name and cache_folder:
+            self.cache_name = cache_name
+            self.cache_folder = cache_folder
+        else:
+            self.cache_name = encode_to_md5(self.file_path) + '.json'
+        self.cache_file_path = self.cache_folder + '/' + self.cache_name
+        if not os.path.exists(self.cache_folder):
+            os.mkdir(self.cache_folder)
+        if check_file_exists(self.cache_folder, self.cache_name) is not None:
+            self.cache_dic = parse_json_file(self.cache_file_path)
+        else:
+            save_lang_file({}, self.cache_file_path)
+
+    def init_bilingual(self):
+        self.lang_bilingual_list = []
+        for key, value in self.lang.items():
+            if self.cache_dic.get(key):
+                self.lang_bilingual_list.append([key, value, self.cache_dic[key]['trans'], ''])
+            else:
+                self.lang_bilingual_list.append([key, value, '', ''])
+
+    # def migrate(self, en_us_path, zh_cn_path):
+    #
+    #     en_us_lang = Lang()
+    #     zh_cn_lang = Lang()
+    #     en_us_lang.read_lang(en_us_path)
+    #     zh_cn_lang.read_lang(zh_cn_path)
+    #     for key, value in self.lang_dic.items():
+    #         # 检查新版本中的原文是否与旧版本相同
+    #         if key in old_data and old_data[key] == value:
+    #             # 如果相同，将对应的翻译从旧版本语言文件迁移到新版本中
+    #             updated_data[key] = old_data[key]
+    #         else:
+    #             # 如果不同，保留新版本中的翻译
+    #             updated_data[key] = value
+
+    def save_cache(self):
+        self.cache_dic = {}
+        for i in range(len(self.lang_bilingual_list)):
+            if self.lang_bilingual_list[i][2] != '':
+                key = self.lang_bilingual_list[i][0]
+                self.cache_dic[key] = {}
+                self.cache_dic[key]['ori'] = self.lang_bilingual_list[i][1]
+                self.cache_dic[key]['trans'] = self.lang_bilingual_list[i][2]
+        save_lang_file(self.cache_dic, self.cache_file_path)
+        return self.cache_file_path
+
+
 class FTBQuest:
     input_path = None
-    prefix = ''
-    text = ''
-    quest = {}
-    lang = {}
-    quest_local = {}
-    low = False
+    quest_name = ''  # 任务文件名称，无文件类型后缀
+    quest_type = 0  # 0-正常snbt,1-旧版本snbt,2-远古版本nbt
+    raw_quest = ''  # 未解析的任务原文
+    quest = {}  # 解析后任务原文(snbt:dict,nbt:NBTFile)
+    lang = Lang()  # 本地化用键值对
+    quest_local = {}  # 替换为使用键值后的任务
+    # 任务标签，解析用
+    end_tag = ['title', 'description', 'subtitle', 'text', 'hover', 'Lore', 'Name']
+    stop_tag = ['{image:', '{@pagebreak}']
 
     def __init__(self, p: str):
-        self.lang = {}
         self.input_path = Path(p)
-        self.prefix = '' + list(self.input_path.parts)[-1].replace('.snbt', '')
-        with open(p, 'r', encoding="utf-8") as fin:
-            text = fin.read()
-            self.text = text
-            self.low = self.check_low()
-            try:
-                quest = snbtlib.loads(text)
-                self.quest = quest
-                self.quest_local = quest
-                self.getLang()
-            except TypeError:
-                print('snbtlib调用出错，可能是python环境版本过低或其它问题！')
-                sys.exit(0)
+        self.quest_name = '' + list(self.input_path.parts)[-1].replace('.snbt', '')
+        self.parse_quest_file(p)
+        self.trans_lang()
 
-    def check_low(self):
-        match = re.search(r',\n(?!")', self.text)
-        if match:
-            return True
+    def parse_quest_file(self, p: str):
+        file_name = list(self.input_path.parts)[-1]
+        if file_name.endswith('.nbt'):
+            self.quest_type = 2
+            self.quest_name = file_name.replace('.nbt', '')
+            nbt_file = nbt.NBTFile(p, 'rb')
+            self.quest = nbt_file
+        elif file_name.endswith('.snbt'):
+            self.quest_type = 0
+            self.quest_name = file_name.replace('.snbt', '')
+            with open(p, 'r', encoding="utf-8") as fin:
+                text = fin.read()
+                # 检查是否为低版本
+                self.raw_quest = text
+                if re.search(r',\n(?!")', text):
+                    self.quest_type = 1
+                try:
+                    quest = snbtlib.loads(text)
+                    self.quest = quest
+                except Exception as ex:
+                    raise Exception('snbtlib调用出错，可能是python环境版本过低或其它问题！')
         else:
+            raise Exception('不支持的任务类型！')
+
+    def trans_lang(self):
+        if self.quest_type == 2:
+            pass
+        else:
+            prefix_list = ['ftbquests']
+            if self.quest.get('chapter_groups'):
+                prefix_list.append('chapter_groups')
+            elif self.quest.get('loot_size'):
+                prefix_list.append('reward_tables')
+            elif self.quest.get('disable_gui'):
+                prefix_list.append('data')
+            else:
+                prefix_list.append('chapter')
+            prefix_list.append(self.quest_name)
+            lang, self.quest_local = self.dfs(self.quest, prefix_list)
+            self.lang.set_lang(lang)
+
+    def save_quest_local(self, output_path: str) -> bool:
+        try:
+            quest_local_text = snbtlib.dumps(self.quest_local, compact=self.quest_type == 1)
+            quest_local_text.replace('"B;"', 'B;')
+            save_file(quest_local_text, output_path)
+            return True
+        except Exception as ex:
             return False
 
-    def dumps(self, dic: dict):
-        quest_local_text = snbtlib.dumps(dic, compact=self.low)
-        quest_local_text.replace('"B;"', 'B;')
-        return quest_local_text
+    def dfs(self, data, prefix: list, flag=False):
+        # 递归遍历字典获取需要的文本
+        res = OrderedDict()
+        prefix_ = copy.deepcopy(prefix)
+        if isinstance(data, dict):
+            for k_, v_ in data.items():
+                child, child_data = self.dfs(v_, prefix_ + [k_])
+                data[k_] = child_data
+                res.update(child)
+        elif type(data) in [list, nbt.TAG_LIST]:
+            length_ = len(data)
+            for i in range(length_):
+                child, child_data = self.dfs(data[i], prefix_ + [str(i + 1)] if length_ > 1 else prefix_, True)
+                data[i] = child_data
+                res.update(child)
+        elif isinstance(data, str):
+            if prefix_[-1] in self.end_tag or (flag and prefix_[-2] in self.end_tag):
+                if bool(re.search(r'\S', data)):
+                    if not any(tag in data for tag in self.stop_tag):
+                        key = f"{'.'.join(prefix_)}"
+                        res[key] = data
+                        data = '{' + key + '}'
+        elif isinstance(data, nbt.TAG_STRING):
+            if prefix_[-1] in self.end_tag or flag:
+                if bool(re.search(r'\S', data.lang)):
+                    if not any(tag in data.lang for tag in self.stop_tag):
+                        key = f"{'.'.join(prefix_)}"
+                        res[key] = data.lang
+                        data.lang = '{' + key + '}'
+        return res, data
 
-    @staticmethod
-    def getValue(prefix: str, text: str):
-        key_value = {}
-        if isinstance(text, list):
-            for i in range(0, len(text)):
-                if bool(re.search(r'\S', text[i])):
-                    if text[i].find('{image:') == -1:
-                        local_key = prefix + '.' + str(i)
-                        key_value[local_key] = text[i]
-                        text[i] = '{' + local_key + '}'
-            return text, key_value
-        else:
-            if text.find('{image:') == -1:
-                key_value[prefix] = text
-                text = '{' + prefix + '}'
-            return text, key_value
-
-    def getLang(self):
-        prefix = self.prefix
-        if self.quest.get('chapter_groups'):
-            chapter_groups = self.quest['chapter_groups']
-            for i in range(0, len(chapter_groups)):
-                local_key = 'ftbquests.chapter_groups.' + prefix + '.' + str(i) + '.title'
-                text, new_lang = self.getValue(local_key, chapter_groups[i]['title'])
-                self.lang.update(new_lang)
-                self.quest_local['chapter_groups'][i]['title'] = text
-        elif self.quest.get('loot_size'):
-            title = self.quest['title']
-            local_key = 'ftbquests.reward_tables.' + prefix + '.title'
-            text, new_lang = self.getValue(local_key, self.quest['title'])
-            self.lang.update(new_lang)
-            self.quest_local['title'] = text
-        elif self.quest.get('disable_gui'):
-            if self.quest.get('title'):
-                local_key = 'ftbquests.data.' + prefix + '.title'
-                text, new_lang = self.getValue(local_key, self.quest['title'])
-                self.lang.update(new_lang)
-                self.quest['title'] = text
-        else:
-            if self.quest.get('title'):
-                title = self.quest['title']
-                local_key = 'ftbquests.chapter.' + prefix + '.title'
-                text, new_lang = self.getValue(local_key, self.quest['title'])
-                self.lang.update(new_lang)
-                self.quest_local['title'] = text
-            if self.quest.get('subtitle'):
-                subtitle = self.quest['subtitle']
-                if len(subtitle) > 0:
-                    local_key = 'ftbquests.chapter.' + prefix + '.subtitle'
-                    text, new_lang = self.getValue(local_key, self.quest['subtitle'])
-                    self.lang.update(new_lang)
-                    self.quest_local['subtitle'] = text
-            if self.quest.get('text'):
-                if len(self.quest['text']) > 0:
-                    local_key = 'ftbquests.chapter.' + prefix + '.text'
-                    text, new_lang = self.getValue(local_key, self.quest['text'])
-                    self.lang.update(new_lang)
-                    self.quest['text'] = text
-            if self.quest.get('images'):
-                images = self.quest['images']
-                for i in range(0, len(images)):
-                    if images[i].get('hover'):
-                        hover = images[i]['hover']
-                        if len(hover) > 0:
-                            local_key = 'ftbquests.chapter.' + prefix + '.images.' + str(i) + '.hover'
-                            text, new_lang = self.getValue(local_key, hover)
-                            self.lang.update(new_lang)
-                            self.quest_local['images'][i]['hover'] = text
-            if self.quest.get('quests'):
-                quests = self.quest['quests']
-                for i in range(0, len(quests)):
-                    # title
-                    if quests[i].get('title'):
-                        title = quests[i]['title']
-                        if len(title) > 0:
-                            local_key = 'ftbquests.chapter.' + prefix + '.quests.' + str(i) + '.title'
-                            text, new_lang = self.getValue(local_key, title)
-                            self.lang.update(new_lang)
-                            self.quest_local['quests'][i]['title'] = text
-                    if quests[i].get('subtitle'):
-                        subtitle = quests[i]['subtitle']
-                        if len(subtitle) > 0:
-                            local_key = 'ftbquests.chapter.' + prefix + '.quests.' + str(i) + '.subtitle'
-                            text, new_lang = self.getValue(local_key, subtitle)
-                            self.lang.update(new_lang)
-                            self.quest_local['quests'][i]['subtitle'] = text
-                    if quests[i].get('description'):
-                        description = quests[i]['description']
-                        if len(description) > 0:
-                            local_key = 'ftbquests.chapter.' + prefix + '.quests.' + str(i) + '.description'
-                            text, new_lang = self.getValue(local_key, description)
-                            self.lang.update(new_lang)
-                            self.quest_local['quests'][i]['description'] = text
-                    if quests[i].get('text'):
-                        if len(quests[i]['text']) > 0:
-                            local_key = 'ftbquests.chapter.' + prefix + '.quests.' + str(i) + '.text'
-                            text, new_key_value = self.getValue(local_key, quests[i]['text'])
-                            self.lang.update(new_key_value)
-                            self.quest['quests'][i]['text'] = text
-                    if quests[i].get('tasks'):
-                        tasks = quests[i]['tasks']
-                        if len(tasks) > 0:
-                            for j in range(0, len(tasks)):
-                                if tasks[j].get('title'):
-                                    title = tasks[j]['title']
-                                    local_key = 'ftbquests.chapter.' + prefix + '.quests.' + str(i) + '.tasks.' + str(
-                                        j) + '.title'
-                                    text, new_lang = self.getValue(local_key, title)
-                                    self.lang.update(new_lang)
-                                    self.quest_local['quests'][i]['tasks'][j]['title'] = text
-
-                    if quests[i].get('tasks'):
-                        tasks = quests[i]['tasks']
-                        if len(tasks) > 0:
-                            for j in range(0, len(tasks)):
-                                if tasks[j].get('description'):
-                                    description = tasks[j]['description']
-                                    local_key = 'ftbquests.chapter.' + prefix + '.quests.' + str(i) + '.tasks.' + str(
-                                        j) + '.description'
-                                    text, new_lang = self.getValue(local_key, description)
-                                    self.lang.update(new_lang)
-                                    self.quest_local['quests'][i]['tasks'][j]['description'] = text
-
-                    if quests[i].get('rewards'):
-                        rewards = quests[i]['rewards']
-                        if len(rewards) > 0:
-                            for j in range(0, len(rewards)):
-                                if rewards[j].get('title'):
-                                    title = rewards[j]['title']
-                                    local_key = 'ftbself.quests.chapter.' + prefix + '.quests.' + str(
-                                        i) + '.rewards.' + str(
-                                        j) + '.title'
-                                    text, new_lang = self.getValue(local_key, title)
-                                    self.lang.update(new_lang)
-                                    self.quest_local['quests'][i]['rewards'][j]['title'] = text
-
-    def backFill(self, lang_: dict):
+    def back_fill(self, lang_: dict):
         text_ = snbtlib.dumps(self.quest_local)
         for key, value in lang_.items():
             text_ = text_.replace('{' + key + '}', str(value))
@@ -305,11 +320,10 @@ class BetterQuest:
             key_value = {}
         for key in dictionary.keys():
             if isinstance(dictionary[key], dict):
-
-                dictionary[key] = dictionary_
-            else:
                 dictionary_, key_value, name_index, desc_index = self.traverse_trans(dictionary[key], key_value,
                                                                                      name_index, desc_index)
+                dictionary[key] = dictionary_
+            else:
                 if dictionary[key] == "":
                     continue
                 elif key.find('name:') != -1:
@@ -325,7 +339,7 @@ class BetterQuest:
 
         return dictionary, key_value, name_index, desc_index
 
-    def backFill(self, lang_: dict):
+    def back_fill(self, lang_: dict):
         text_ = json.dumps(self.quest_local, indent=4, ensure_ascii=False)
         for key, value in lang_.items():
             text_ = text_.replace(key, str(value))
@@ -334,6 +348,34 @@ class BetterQuest:
     def dumps(self, dic: dict):
         text = json.dumps(dic, indent=1, ensure_ascii=False)
         return text
+
+
+class Mod:
+    def __init__(self, path):
+        self.path = path
+        self.modName = ''
+        self.langList = []
+        self.get_info()
+
+    def get_info(self):
+        with zipfile.ZipFile(self.path, 'r') as jar:
+            for file_info in jar.infolist():
+                name = file_info.filename
+                match1 = re.search(r"assets/([^/]+)", name)
+                if match1:
+                    self.modName = match1.group(1)
+                match2 = re.search(r"lang/([^/]+)", name)
+                if match2:
+                    self.langList.append(match2.group(1))
+
+    def get_lang_text(self, lang_name: str):
+        with zipfile.ZipFile(self.path, 'r') as jar:
+            for file_info in jar.infolist():
+                name = file_info.filename
+                if (r'lang/' + lang_name) in name:
+                    with jar.open(name) as json_file:
+                        content = json_file.read().decode('latin-1')
+                        return content
 
 
 class Translator(QObject):
@@ -494,120 +536,6 @@ class LangTranslatorThread(QThread):
 
     def handle_emit_process_info(self, info: str):
         self.info.emit(info)
-
-
-class Lang:
-    def __init__(self):
-        self.file_path = ''
-        self.lang_dic = {}
-        self.cache_dic = {}
-        self.cache_name = ''
-        self.cache_folder = ''
-        self.cache_file_path = ''
-        self.lang_bilingual_list = []
-
-    def read_lang(self, file_path: str, cache: bool = False):
-        self.__init__()
-        self.cache_folder = f"{cfg.get(cfg.workFolder)}/.mplt/cache"
-        self.file_path = file_path
-        # 读取数据
-        # 兼容lang或json类型语言文件
-        if file_path.endswith('.lang'):
-            with open(self.file_path, 'r', encoding='utf-8') as f:
-                lang_data = f.read()
-                # 清理注释
-                lang_data = '\n'.join(line for line in lang_data.split('\n') if not line.strip().startswith("#"))
-                # 分割键值对
-                lang_data = [line.strip() for line in lang_data.split('\n') if line.strip()]
-                for line in lang_data:
-                    key, value = line.split("=", maxsplit=1)
-                    self.lang_dic[key.strip()] = value.strip()
-        elif file_path.endswith('.json'):
-            self.lang_dic = parse_json_file(file_path)
-        if cache:
-            self.init_cache()
-        self.init_bilingual()
-
-    def set_lang(self, data: dict):
-        self.__init__()
-        self.lang_dic = data
-        self.init_bilingual()
-
-    def init_cache(self, cache_name: str = None, cache_folder: str = None):
-        if cache_name and cache_folder:
-            self.cache_name = cache_name
-            self.cache_folder = cache_folder
-        else:
-            self.cache_name = encode_to_MD5(self.file_path) + '.json'
-        self.cache_file_path = self.cache_folder + '/' + self.cache_name
-        if not os.path.exists(self.cache_folder):
-            os.mkdir(self.cache_folder)
-        if check_file_exists(self.cache_folder, self.cache_name) is not None:
-            self.cache_dic = parse_json_file(self.cache_file_path)
-        else:
-            save_lang_file({}, self.cache_file_path)
-
-    def init_bilingual(self):
-        self.lang_bilingual_list = []
-        for key, value in self.lang_dic.items():
-            if self.cache_dic.get(key):
-                self.lang_bilingual_list.append([key, value, self.cache_dic[key]['trans'], ''])
-            else:
-                self.lang_bilingual_list.append([key, value, '', ''])
-
-    # def migrate(self, en_us_path, zh_cn_path):
-    #
-    #     en_us_lang = Lang()
-    #     zh_cn_lang = Lang()
-    #     en_us_lang.read_lang(en_us_path)
-    #     zh_cn_lang.read_lang(zh_cn_path)
-    #     for key, value in self.lang_dic.items():
-    #         # 检查新版本中的原文是否与旧版本相同
-    #         if key in old_data and old_data[key] == value:
-    #             # 如果相同，将对应的翻译从旧版本语言文件迁移到新版本中
-    #             updated_data[key] = old_data[key]
-    #         else:
-    #             # 如果不同，保留新版本中的翻译
-    #             updated_data[key] = value
-
-    def save_cache(self):
-        self.cache_dic = {}
-        for i in range(len(self.lang_bilingual_list)):
-            if self.lang_bilingual_list[i][2] != '':
-                key = self.lang_bilingual_list[i][0]
-                self.cache_dic[key] = {}
-                self.cache_dic[key]['ori'] = self.lang_bilingual_list[i][1]
-                self.cache_dic[key]['trans'] = self.lang_bilingual_list[i][2]
-        save_lang_file(self.cache_dic, self.cache_file_path)
-        return self.cache_file_path
-
-
-class Mod:
-    def __init__(self, path):
-        self.path = path
-        self.modName = ''
-        self.langList = []
-        self.get_info()
-
-    def get_info(self):
-        with zipfile.ZipFile(self.path, 'r') as jar:
-            for file_info in jar.infolist():
-                name = file_info.filename
-                match1 = re.search(r"assets/([^/]+)", name)
-                if match1:
-                    self.modName = match1.group(1)
-                match2 = re.search(r"lang/([^/]+)", name)
-                if match2:
-                    self.langList.append(match2.group(1))
-
-    def get_lang_text(self, lang_name: str):
-        with zipfile.ZipFile(self.path, 'r') as jar:
-            for file_info in jar.infolist():
-                name = file_info.filename
-                if (r'lang/' + lang_name) in name:
-                    with jar.open(name) as json_file:
-                        content = json_file.read().decode('latin-1')
-                        return content
 
 
 class ResourcePack:

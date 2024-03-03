@@ -5,7 +5,9 @@ from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices, QKeySequence
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QShortcut
 from qfluentwidgets import ScrollArea, InfoBar, RoundMenu, Action, FluentIcon, DropDownPushButton, StateToolTip, \
-    ProgressBar, TextEdit, MessageBox, InfoBarPosition
+    ProgressBar, TextEdit, MessageBox, CommandBar, TransparentDropDownPushButton, setFont, CheckableMenu, \
+    MenuIndicatorType
+from qfluentwidgets import FluentIcon as FIF
 
 from common.config import cfg
 from common.style_sheet import StyleSheet
@@ -31,7 +33,7 @@ class WorkInterface(ScrollArea):
         self.stateTooltip = None
         self.translator_thread = None
         self.trans_list = None
-        self.lang = Lang()
+        self.lang = None
         self.quest = None
 
         self.view = QWidget(self)
@@ -112,8 +114,8 @@ class WorkInterface(ScrollArea):
         self.subHbox.addWidget(self.dropDownPushButton_save)
 
         self.middleLayout.addWidget(self.langBrowser)
-        self.middleLayout.addStretch(1)
-        self.middleLayout.addWidget(button_box)
+        # self.middleLayout.addWidget(button_box)
+        self.middleLayout.addWidget(self.createCommandBar())
         self.middleBox.setLayout(self.middleLayout)
 
         self.searchBox = QWidget()
@@ -143,6 +145,35 @@ class WorkInterface(ScrollArea):
         self.transLog.setObjectName('transLog')
         StyleSheet.WORK_INTERFACE.apply(self)
 
+    def createCommandBar(self):
+        bar = CommandBar(self)
+        bar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        bar.addActions([
+            Action(FIF.SEND_FILL, '开始机翻'),
+            Action(FIF.ADD, self.tr('Add')),
+            Action(FIF.ROTATE, self.tr('Rotate')),
+            Action(FIF.ZOOM_IN, self.tr('Zoom in')),
+            Action(FIF.ZOOM_OUT, self.tr('Zoom out')),
+        ])
+        bar.addSeparator()
+        bar.addActions([
+            Action(FIF.EDIT, self.tr('Edit'), checkable=True),
+            Action(FIF.INFO, self.tr('Info')),
+            Action(FIF.DELETE, self.tr('Delete')),
+            Action(FIF.SHARE, self.tr('Share'))
+        ])
+
+        # add custom widget
+        button = TransparentDropDownPushButton(self.tr('Sort'), self, FIF.SCROLL)
+        button.setFixedHeight(34)
+        setFont(button, 12)
+        bar.addWidget(button)
+
+        bar.addHiddenActions([
+            Action(FIF.SETTING, self.tr('Settings'), shortcut='Ctrl+I'),
+        ])
+        return bar
+
     def __checkUpdate(self):
         if self.first_update_flag and update_checker.need_update and cfg.get(cfg.checkUpdateAtStartUp):
             self.first_update_flag = False
@@ -170,7 +201,7 @@ class WorkInterface(ScrollArea):
                 self.lang.read_lang(path, cache=True)
             elif ext == '.snbt':
                 self.quest = FTBQuest(path)
-                self.lang.set_lang(self.quest.lang)
+                self.lang = self.quest.lang
             else:
                 InfoBar.info(
                     self.tr('无法读取'),
@@ -179,6 +210,7 @@ class WorkInterface(ScrollArea):
                     parent=self
                 )
         except Exception as e:
+            raise e
             InfoBar.error(
                 self.tr('错误'),
                 self.tr(str(e)),
@@ -302,7 +334,7 @@ class WorkInterface(ScrollArea):
         if self.ext == '.snbt':
             prefix_path = os.path.dirname(self.quest.input_path) + '/回填后文件'
             os.makedirs(prefix_path) if not os.path.exists(prefix_path) else None
-            folder, _ = QFileDialog.getSaveFileName(self, "保存文件", prefix_path + '/' + self.quest.prefix
+            folder, _ = QFileDialog.getSaveFileName(self, "保存文件", prefix_path + '/' + self.quest.quest_name
                                                     , "SNBT 文件 (*.snbt);;所有文件 (*)")
         else:
             original_path = os.path.dirname(self.lang.file_path) + '/zh_cn' if 'en' in self.lang.file_path else '/zh_CN'
@@ -313,7 +345,7 @@ class WorkInterface(ScrollArea):
         if self.ext == '.snbt':
             prefix_path = os.path.dirname(self.quest.input_path) + '/回填后文件'
             os.makedirs(prefix_path) if not os.path.exists(prefix_path) else None
-            folder = f"{prefix_path}/{self.quest.prefix}.snbt"
+            folder = f"{prefix_path}/{self.quest.quest_name}.snbt"
         else:
             folder = self.lang.file_path.replace('en_us.', 'zh_cn.')
             folder = folder.replace('en_US.', 'zh_CN.')
@@ -326,7 +358,7 @@ class WorkInterface(ScrollArea):
                 if self.ext != '.snbt':
                     save_lang_file(data, path)
                 else:
-                    save_lang_file(data, path, self.quest.backFill(data))
+                    save_lang_file(data, path, self.quest.back_fill(data))
             except Exception as e:
                 InfoBar.error(
                     self.tr('保存失败'),
@@ -367,8 +399,8 @@ class WorkInterface(ScrollArea):
                             old_lang_en = Lang()
                             old_lang_en.read_lang(os.path.join(root, file))
                 if old_lang_zh and old_lang_en:
-                    old_lang_zh_dic = old_lang_zh.lang_dic
-                    old_lang_en_dic = old_lang_en.lang_dic
+                    old_lang_zh_dic = old_lang_zh.lang
+                    old_lang_en_dic = old_lang_en.lang
                     for i in range(0, len(self.lang.lang_bilingual_list)):
                         new_lang_en_text = self.lang.lang_bilingual_list[i][1]
                         for key, value in old_lang_en_dic.items():

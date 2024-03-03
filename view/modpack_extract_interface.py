@@ -267,11 +267,11 @@ class ProcessThread(QThread):
                     quest = FTBQuest(ftbq)
                     if 'reward_tables' in str(quest.input_path):  # 奖励表不处理
                         continue
-                    if quest.prefix in ['data', 'chapter_groups']:
-                        quest_local_path = self.work_folder + '/ftbquests/local/' + quest.prefix + '.snbt'
+                    if quest.quest_name in ['data', 'chapter_groups']:
+                        quest_local_path = self.work_folder + '/ftbquests/local/' + quest.quest_name + '.snbt'
                     else:
-                        quest_local_path = self.work_folder + '/ftbquests/local/chapters/' + quest.prefix + '.snbt'
-                    save_file(quest.dumps(quest.quest_local), quest_local_path)
+                        quest_local_path = self.work_folder + '/ftbquests/local/chapters/' + quest.quest_name + '.snbt'
+                    quest.save_quest_local(quest_local_path)
                     ftbq_lang.update(quest.lang)
                 quest_lang_path = self.work_folder + '/ftbquests/lang/en_us.json'
                 save_file(json.dumps(ftbq_lang, indent=1, ensure_ascii=False), quest_lang_path)

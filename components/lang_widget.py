@@ -287,6 +287,7 @@ class ReviewLangWidget(ScrollArea):
                     self.suggestPanel.addCard(author='术语库', trans='|'.join(term[1][1]), ori=term[1][0], icon=FluentIcon.HELP)
 
     def get_all_cache_dic(self):
-        for path in Path(cfg.get(cfg.cacheFolder)).rglob("*.json"):
+        cache_path = f"{cfg.get(cfg.workFolder)}/.mplt/cache"
+        for path in Path(cache_path).rglob("*.json"):
             cache_dic = parse_json_file(str(path))
             self.all_cache_dic = merge_dicts(self.all_cache_dic, cache_dic)
