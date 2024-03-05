@@ -1,18 +1,18 @@
 # coding:utf-8
 import os
+from pathlib import Path
 
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices, QKeySequence
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QShortcut
-from qfluentwidgets import ScrollArea, InfoBar, RoundMenu, Action, FluentIcon, DropDownPushButton, StateToolTip, \
-    ProgressBar, TextEdit, MessageBox, CommandBar, TransparentDropDownPushButton, setFont, CheckableMenu, \
-    MenuIndicatorType
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QShortcut, QLabel
+from qfluentwidgets import ScrollArea, InfoBar, RoundMenu, Action, FluentIcon, StateToolTip, \
+    ProgressBar, TextEdit, MessageBox, CommandBar, TransparentDropDownPushButton, setFont
 from qfluentwidgets import FluentIcon as FIF
 
 from common.config import cfg
 from common.style_sheet import StyleSheet
 from common.update_checker import update_checker
-from common.util import Lang, LangTranslatorThread, save_lang_file, FTBQuest
+from common.util import Lang, LangTranslateThread, save_lang_file, FTBQuest, BetterQuest
 from components.file_browser import FileBrowser
 from components.pivot_interface import PivotInterface
 from .search_interface import SearchDictInterface
@@ -23,7 +23,7 @@ class WorkInterface(ScrollArea):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.ext = None
+        self.ext = None  # 文件后缀.snbt .nbt .json .lang
         self.first_update_flag = True
         self.data = [
             ['', '你可以在左侧工作区域内选择json格式的语言文件，双击读取并编辑', '', ''],
@@ -33,7 +33,7 @@ class WorkInterface(ScrollArea):
         self.stateTooltip = None
         self.translator_thread = None
         self.trans_list = None
-        self.lang = None
+        self.lang = Lang()
         self.quest = None
 
         self.view = QWidget(self)
@@ -54,73 +54,34 @@ class WorkInterface(ScrollArea):
         self.middleLayout = QVBoxLayout()
 
         self.langBrowser = PivotInterface(self.data)
-        self.langBrowser.setMinimumHeight(620)
+        self.langBrowser.setMinimumHeight(820)
 
         self.progressBar = ProgressBar()
         self.progressBar.setValue(0)
         self.middleLayout.addWidget(self.progressBar)
 
-        self.subHbox = QHBoxLayout()
-        button_box = QWidget()
-        button_box.setLayout(self.subHbox)
-
-        self.menu_save = RoundMenu(parent=self)
-        self.menu_trans = RoundMenu(parent=self)
-        self.menu_extra = RoundMenu(parent=self)
-
-        self.action_trans_start = Action(FluentIcon.SEND_FILL, '开始机翻')
-        self.action_trans_start.setShortcut('F1')
-        self.action_trans_stop = Action(FluentIcon.CLOSE, '终止机翻')
-        self.action_trans_stop.setShortcut('F2')
-        self.action_save_lang = Action(FluentIcon.SAVE, '保存')
-        self.action_save_lang.setShortcut('F3')
-        self.action_save_lang_as = Action(FluentIcon.SAVE_AS, '另存为')
-        self.action_save_lang_as.setShortcut('F4')
-        self.action_save_cache = Action(FluentIcon.PIN, '保存进度')
-        self.action_save_cache.setShortcut('F5')
-        self.action_migrate = Action(FluentIcon.HISTORY, '从旧版本迁移')
-
+        # 绑定快捷键
         shortcut1 = QShortcut(QKeySequence("F1"), self.view)
         shortcut2 = QShortcut(QKeySequence("F2"), self.view)
         shortcut3 = QShortcut(QKeySequence("F3"), self.view)
         shortcut4 = QShortcut(QKeySequence("F4"), self.view)
         shortcut5 = QShortcut(QKeySequence("F5"), self.view)
-        shortcut1.activated.connect(self.handle_translate_start)
+        shortcut1.activated.connect(lambda: self.handle_translate_start(self.lang))
         shortcut2.activated.connect(self.handle_translate_stop)
         shortcut3.activated.connect(self.handle_save)
         shortcut4.activated.connect(self.handle_save_as)
         shortcut5.activated.connect(self.handle_save_cache)
 
-        self.action_trans_start.triggered.connect(self.handle_translate_start)
-        self.action_trans_start.triggered.connect(self.__checkUpdate)
-        self.action_trans_stop.triggered.connect(self.handle_translate_stop)
-        self.action_save_cache.triggered.connect(self.handle_save_cache)
-        self.action_save_lang.triggered.connect(self.handle_save)
-        self.action_save_lang_as.triggered.connect(self.handle_save_as)
-        self.action_migrate.triggered.connect(self.handle_migrate)
-
-        self.menu_trans.addAction(self.action_trans_start)
-        self.menu_trans.addAction(self.action_trans_stop)
-        self.menu_trans.addAction(self.action_migrate)
-        self.menu_save.addAction(self.action_save_lang)
-        self.menu_save.addAction(self.action_save_lang_as)
-        self.menu_save.addAction(self.action_save_cache)
-
-        self.dropDownPushButton_save = DropDownPushButton('保存', self, FluentIcon.SAVE)
-        self.dropDownPushButton_trans = DropDownPushButton('预翻译', self, FluentIcon.BASKETBALL)
-        self.dropDownPushButton_save.setMenu(self.menu_save)
-        self.dropDownPushButton_trans.setMenu(self.menu_trans)
-        self.subHbox.addWidget(self.dropDownPushButton_trans)
-        self.subHbox.addWidget(self.dropDownPushButton_save)
-
         self.middleLayout.addWidget(self.langBrowser)
-        # self.middleLayout.addWidget(button_box)
-        self.middleLayout.addWidget(self.createCommandBar())
+        self.middleLayout.addStretch(1)
+        self.middleLayout.addWidget(self.create_command_bar())
         self.middleBox.setLayout(self.middleLayout)
 
         self.searchBox = QWidget()
         self.searchLayout = QVBoxLayout()
         self.searchBox.setFixedWidth(300)
+        self.remain_time_label = QLabel()
+        self.remain_time_label.setFixedHeight(40)
         self.transLog = TextEdit()
         self.transLog.setStyleSheet('background-color: transparent;border:none')
         self.transLog.setFixedSize(280, 320)
@@ -130,12 +91,14 @@ class WorkInterface(ScrollArea):
                                    f'/停止机翻\nF3/F4-保存/另存为')
         self.searchDictInterface.setFixedHeight(400)
         self.searchLayout.addWidget(self.searchDictInterface)
-        # self.searchLayout.addWidget(self.searchCacheInterface)
         self.searchLayout.addStretch(1)
+        self.remain_time_label.setText('')
+        self.searchLayout.addWidget(self.remain_time_label)
         self.searchLayout.addWidget(self.transLog)
         self.searchBox.setLayout(self.searchLayout)
 
         self.fileBrowser.chooseFile.connect(self.handle_choose_file)
+        self.fileBrowser.chooseFolder.connect(self.handle_choose_folder)
 
         self.layout.addWidget(self.fileBrowser)
         self.layout.addWidget(self.middleBox)
@@ -145,36 +108,55 @@ class WorkInterface(ScrollArea):
         self.transLog.setObjectName('transLog')
         StyleSheet.WORK_INTERFACE.apply(self)
 
-    def createCommandBar(self):
+    def create_command_bar(self):
         bar = CommandBar(self)
         bar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        bar.addActions([
-            Action(FIF.SEND_FILL, '开始机翻'),
-            Action(FIF.ADD, self.tr('Add')),
-            Action(FIF.ROTATE, self.tr('Rotate')),
-            Action(FIF.ZOOM_IN, self.tr('Zoom in')),
-            Action(FIF.ZOOM_OUT, self.tr('Zoom out')),
-        ])
+        # 创建下拉菜单
+        menu_save = RoundMenu(parent=self)
+        menu_pre_trans = RoundMenu(parent=self)
+        # menu_extra = RoundMenu(parent=self)
+        action_trans_start = Action(FluentIcon.SEND_FILL, '开始机翻', shortcut='F1')
+        action_trans_stop = Action(FluentIcon.CLOSE, '终止机翻', shortcut='F2')
+        action_save_lang = Action(FluentIcon.SAVE, '保存', shortcut='F3')
+        action_save_lang_as = Action(FluentIcon.SAVE_AS, '另存为', shortcut='F4')
+        action_save_cache = Action(FluentIcon.PIN, '保存进度', shortcut='F5')
+        action_migrate = Action(FluentIcon.HISTORY, '从旧版本迁移')
+        # 绑定信号槽
+        action_trans_start.triggered.connect(lambda: self.handle_translate_start(self.lang))
+        action_trans_start.triggered.connect(self.__check_update)
+        action_trans_stop.triggered.connect(self.handle_translate_stop)
+        action_save_cache.triggered.connect(self.handle_save_cache)
+        action_save_lang.triggered.connect(self.handle_save)
+        action_save_lang_as.triggered.connect(self.handle_save_as)
+        action_migrate.triggered.connect(self.handle_migrate)
+        # 绑定事件
+        menu_pre_trans.addAction(action_trans_start)
+        menu_pre_trans.addAction(action_trans_stop)
+        menu_save.addAction(action_save_lang)
+        menu_save.addAction(action_save_lang_as)
+        # 调整样式完成菜单创建
+        save_btn = TransparentDropDownPushButton('保存', self, FluentIcon.SAVE)
+        save_btn.setMenu(menu_save)
+        save_btn.setFixedHeight(34)
+        setFont(save_btn, 12)
+        pre_trans_btn = TransparentDropDownPushButton(self.tr('预翻译'), self, FluentIcon.BASKETBALL)
+        pre_trans_btn.setMenu(menu_pre_trans)
+        pre_trans_btn.setFixedHeight(34)
+        setFont(pre_trans_btn, 12)
+        # 放入菜单栏中
+        bar.addWidget(pre_trans_btn)
+        bar.addWidget(save_btn)
         bar.addSeparator()
         bar.addActions([
-            Action(FIF.EDIT, self.tr('Edit'), checkable=True),
-            Action(FIF.INFO, self.tr('Info')),
-            Action(FIF.DELETE, self.tr('Delete')),
-            Action(FIF.SHARE, self.tr('Share'))
+            action_save_cache,
+            action_migrate,
         ])
-
-        # add custom widget
-        button = TransparentDropDownPushButton(self.tr('Sort'), self, FIF.SCROLL)
-        button.setFixedHeight(34)
-        setFont(button, 12)
-        bar.addWidget(button)
-
-        bar.addHiddenActions([
-            Action(FIF.SETTING, self.tr('Settings'), shortcut='Ctrl+I'),
-        ])
+        # bar.addHiddenActions([
+        #     Action(FIF.SETTING, self.tr('Settings'), shortcut='Ctrl+I'),
+        # ])
         return bar
 
-    def __checkUpdate(self):
+    def __check_update(self):
         if self.first_update_flag and update_checker.need_update and cfg.get(cfg.checkUpdateAtStartUp):
             self.first_update_flag = False
             title = self.tr('检测到新版本:%s' % update_checker.latest_version)
@@ -198,7 +180,7 @@ class WorkInterface(ScrollArea):
         self.ext = ext
         try:
             if ext in ['.json', '.lang']:
-                self.lang.read_lang(path, cache=True)
+                self.lang.read_lang(path)
             elif ext == '.snbt':
                 self.quest = FTBQuest(path)
                 self.lang = self.quest.lang
@@ -237,37 +219,52 @@ class WorkInterface(ScrollArea):
                     parent=self
                 )
 
+    def handle_choose_folder(self, path):
+        # 批量预翻译并生成缓存文件
+        failed_file = []
+        lang = []
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                if "zh_cn" not in file.lower():
+                    ext = os.path.splitext(file)[1].lower()
+                    file_path = os.path.join(root, file)
+                    if ext in ['json', 'lang']:
+                        if "betterquesting" in root and ext == '.json':
+                            lang.append(BetterQuest(file_path).lang)
+                        else:
+                            lang.append(Lang().read_lang(file_path))
+                    elif ext == '.snbt':
+                        lang.append(FTBQuest(file_path).lang)
+                    else:
+                        failed_file.append({
+                            'file_name': files,
+                            'reason': "不支持的文件类型，自动略过",
+                        })
+                else:
+                    failed_file.append({
+                        'file_name': files,
+                        'reason': "语言文件可能为中文，自动略过",
+                    })
+        self.handle_translate_start(lang, single=False)
+
     def read_cache_tooltip(self):
         if self.lang.cache_dic != {}:
             InfoBar.success(
                 self.tr('读取到进度缓存'),
                 self.tr(''),
-                duration=5000,
+                duration=3000,
                 parent=self
             )
 
-    def handle_translate_start(self):
-        keepOriginal = cfg.get(cfg.keepOriginal)
-        # if not cfg.get(cfg.keepOriginal):
-        #     if not activate.activate:
-        #         keepOriginal = False
-        #         InfoBar.warning(
-        #             title=self.tr('你的配置貌似有些问题'),
-        #             content=self.tr("不用担心，我会已经帮你修正了😊"),
-        #             orient=Qt.Horizontal,
-        #             isClosable=False,  # disable close button
-        #             position=InfoBarPosition.TOP_LEFT,
-        #             duration=2000,
-        #             parent=self
-        #         )
-        #     cfg.set(cfg.keepOriginal, True)
-
-        self.translator_thread = LangTranslatorThread(self.lang.lang_bilingual_list, 'en', 'zh', cfg.get(cfg.appKey),
-                                                      cfg.get(cfg.appSecret), keepOriginal)
+    def handle_translate_start(self, lang, single=True):
+        self.translator_thread = LangTranslateThread(lang, 'en', 'zh', cfg.get(cfg.appKey),
+                                                     cfg.get(cfg.appSecret))
         self.trans_list = self.lang.lang_bilingual_list
-        self.translator_thread.finished.connect(self.on_translation_finished)
+        self.remain_time_label.setText('')
+        self.translator_thread.finished.connect(lambda: self.on_translation_finished(single))
         self.translator_thread.progress.connect(self.progressBar.setValue)
         self.translator_thread.index.connect(self.langBrowser.reviewInterface.current_trans_info.setText)
+        self.translator_thread.remain_time.connect(self.remain_time_label.setText)
         self.translator_thread.error.connect(self.on_translation_failed)
         self.translator_thread.info.connect(self.update_trans_log)
         self.translator_thread.start()
@@ -281,6 +278,7 @@ class WorkInterface(ScrollArea):
     def handle_translate_stop(self):
         try:
             self.translator_thread.stop()
+            self.remain_time_label.setText('')
         except Exception as e:
             InfoBar.warning(
                 self.tr('终止出错'),
@@ -289,14 +287,19 @@ class WorkInterface(ScrollArea):
                 parent=self
             )
 
-    def on_translation_finished(self):
+    def on_translation_finished(self, single=True):
+        """
+        :param single 区分是否为单个翻译，批量翻译情况下无需同步编辑器
+        """
         self.progressBar.hide()
         self.stateTooltip.setContent(
             self.tr('完成，你可以在编辑视图中查看!') + ' 😆')
         self.stateTooltip.setState(True)
         self.stateTooltip = None
-        self.langBrowser.browseInterface.update_table(self.lang.lang_bilingual_list)
-        self.langBrowser.reviewInterface.update_table(self.lang.lang_bilingual_list)
+        self.remain_time_label.setText('')
+        if single:
+            self.langBrowser.browseInterface.update_table(self.lang.lang_bilingual_list)
+            self.langBrowser.reviewInterface.update_table(self.lang.lang_bilingual_list)
 
     def on_translation_failed(self, error_msg):
         # 隐藏进度条，恢复用户界面
@@ -313,6 +316,7 @@ class WorkInterface(ScrollArea):
         self.stateTooltip = None
 
     def handle_save_cache(self):
+        # TODO 改为使用向量数据库或AC自动机进行检索，修改数据保存方式
         try:
             result = self.lang.save_cache()
         except Exception as e:
@@ -325,8 +329,8 @@ class WorkInterface(ScrollArea):
         else:
             InfoBar.success(
                 self.tr('进度缓存成功'),
-                self.tr('已保存于:%s' % result),
-                duration=10000,
+                self.tr('已保存于 %s' % result.split('/')[-1]),
+                duration=5000,
                 parent=self
             )
 
@@ -399,8 +403,8 @@ class WorkInterface(ScrollArea):
                             old_lang_en = Lang()
                             old_lang_en.read_lang(os.path.join(root, file))
                 if old_lang_zh and old_lang_en:
-                    old_lang_zh_dic = old_lang_zh.lang
-                    old_lang_en_dic = old_lang_en.lang
+                    old_lang_zh_dic = old_lang_zh.lang_dic
+                    old_lang_en_dic = old_lang_en.lang_dic
                     for i in range(0, len(self.lang.lang_bilingual_list)):
                         new_lang_en_text = self.lang.lang_bilingual_list[i][1]
                         for key, value in old_lang_en_dic.items():
