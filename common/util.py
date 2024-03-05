@@ -7,14 +7,17 @@ import re
 import time
 import zipfile
 from collections import OrderedDict
+from functools import wraps
 from pathlib import Path
 
 import ahocorasick
 import requests
 import snbtlib
 from PyQt5.QtCore import QThread, pyqtSignal, QObject
-from transformers import MarianTokenizer, MarianMTModel
 from nbt import nbt
+from nbt.nbt import TAG
+
+# from transformers import MarianTokenizer, MarianMTModel
 
 from common.config import cfg
 
@@ -49,6 +52,23 @@ def save_lang_file(data_: dict, path: str, text: str = None):
     elif path.endswith('.snbt'):
         with open(path, 'w', encoding='utf-8') as f:
             f.write(text)
+
+
+def func_timer(function):
+    """
+    用装饰器实现函数计时
+    :param function: 需要计时的函数
+    :return: tuple(运算的结果,运行时间)
+    """
+
+    @wraps(function)
+    def function_timer(*args, **kwargs):
+        t0 = time.time()
+        result = function(*args, **kwargs)
+        t1 = time.time()
+        return result, round(t1 - t0, 2)
+
+    return function_timer
 
 
 def check_file_exists(directory_path, file_name):
@@ -94,13 +114,11 @@ def get_if_folder_exists(directory, target_folder):
     return None
 
 
-def encode_to_md5(filepath):
-    print(filepath)
-    stat = os.stat(filepath)
-    size = stat.st_size
-
-    identifier = hashlib.md5(str(size).encode()).hexdigest()
-
+def encode_to_MD5(filepath):
+    # 使用MD5进行文件内容摘要
+    file_data = open(filepath, 'rb').read()
+    mixed_file_data = bytes(filepath, encoding='utf-8') + file_data  # 防止内容相同引起的混淆
+    identifier = hashlib.md5(mixed_file_data).hexdigest()
     return identifier
 
 
@@ -111,20 +129,17 @@ def find_similar_terms(term, term_dict):
 
 
 class Lang:
-    lang = None
-    file_path = ''
-    cache_dic = {}
-    cache_name = ''
-    cache_folder = ''
-    cache_file_path = ''
-    lang_bilingual_list = []
-
-    def __init__(self, lang: dict = None):
-        self.lang = lang
-
-    def read_lang(self, file_path: str, cache: bool = False):
-        self.__init__()
+    def __init__(self):
+        self.file_path = ''
+        self.lang_dic = {}
+        self.cache_dic = {}
+        self.cache_name = ''
         self.cache_folder = f"{cfg.get(cfg.workFolder)}/.mplt/cache"
+        self.cache_file_path = ''
+        self.lang_bilingual_list = []
+
+    def read_lang(self, file_path: str):
+        self.__init__()
         self.file_path = file_path
         # 读取数据
         # 兼容lang或json类型语言文件
@@ -137,24 +152,30 @@ class Lang:
                 lang_data = [line.strip() for line in lang_data.split('\n') if line.strip()]
                 for line in lang_data:
                     key, value = line.split("=", maxsplit=1)
-                    self.lang[key.strip()] = value.strip()
+                    self.lang_dic[key.strip()] = value.strip()
         elif file_path.endswith('.json'):
-            self.lang = parse_json_file(file_path)
-        if cache:
-            self.init_cache()
+            self.lang_dic = parse_json_file(file_path)
+        self.init_cache()
         self.init_bilingual()
 
-    def set_lang(self, data: dict):
+    def set_lang(self, data: dict, file_path: str):
         self.__init__()
-        self.lang = data
+        self.lang_dic = data
+        self.init_cache(file_path)
         self.init_bilingual()
 
-    def init_cache(self, cache_name: str = None, cache_folder: str = None):
-        if cache_name and cache_folder:
-            self.cache_name = cache_name
-            self.cache_folder = cache_folder
+    def init_cache(self, file_path: str = None):
+        """
+        初始化缓存文件
+        有则加载，无则创建
+        两个参数用于非Lang文件保存缓存时使用
+        """
+        if file_path:
+            self.cache_name = encode_to_MD5(file_path) + '.json'
         else:
-            self.cache_name = encode_to_md5(self.file_path) + '.json'
+            if not self.file_path:
+                raise Exception("缓存文件MD5路径生成错误,缺少文件地址")
+            self.cache_name = encode_to_MD5(self.file_path) + '.json'
         self.cache_file_path = self.cache_folder + '/' + self.cache_name
         if not os.path.exists(self.cache_folder):
             os.mkdir(self.cache_folder)
@@ -164,8 +185,9 @@ class Lang:
             save_lang_file({}, self.cache_file_path)
 
     def init_bilingual(self):
+        # 初始化双语文件，分别存放：键、原文、机翻、译文
         self.lang_bilingual_list = []
-        for key, value in self.lang.items():
+        for key, value in self.lang_dic.items():
             if self.cache_dic.get(key):
                 self.lang_bilingual_list.append([key, value, self.cache_dic[key]['trans'], ''])
             else:
@@ -189,12 +211,13 @@ class Lang:
     def save_cache(self):
         self.cache_dic = {}
         for i in range(len(self.lang_bilingual_list)):
-            if self.lang_bilingual_list[i][2] != '':
+            if self.lang_bilingual_list[i][2]:
                 key = self.lang_bilingual_list[i][0]
                 self.cache_dic[key] = {}
                 self.cache_dic[key]['ori'] = self.lang_bilingual_list[i][1]
                 self.cache_dic[key]['trans'] = self.lang_bilingual_list[i][2]
-        save_lang_file(self.cache_dic, self.cache_file_path)
+        if self.cache_dic:
+            save_lang_file(self.cache_dic, self.cache_file_path)
         return self.cache_file_path
 
 
@@ -203,14 +226,14 @@ class FTBQuest:
     quest_name = ''  # 任务文件名称，无文件类型后缀
     quest_type = 0  # 0-正常snbt,1-旧版本snbt,2-远古版本nbt
     raw_quest = ''  # 未解析的任务原文
-    quest = {}  # 解析后任务原文(snbt:dict,nbt:NBTFile)
-    lang = Lang()  # 本地化用键值对
+    quest = None  # 解析后任务原文(snbt:dict,nbt:NBTFile)
     quest_local = {}  # 替换为使用键值后的任务
     # 任务标签，解析用
     end_tag = ['title', 'description', 'subtitle', 'text', 'hover', 'Lore', 'Name']
     stop_tag = ['{image:', '{@pagebreak}']
 
     def __init__(self, p: str):
+        self.lang = Lang()  # 提取出的语言文件
         self.input_path = Path(p)
         self.quest_name = '' + list(self.input_path.parts)[-1].replace('.snbt', '')
         self.parse_quest_file(p)
@@ -255,7 +278,7 @@ class FTBQuest:
                 prefix_list.append('chapter')
             prefix_list.append(self.quest_name)
             lang, self.quest_local = self.dfs(self.quest, prefix_list)
-            self.lang.set_lang(lang)
+            self.lang.set_lang(lang, str(self.input_path))
 
     def save_quest_local(self, output_path: str) -> bool:
         try:
@@ -288,7 +311,7 @@ class FTBQuest:
                         key = f"{'.'.join(prefix_)}"
                         res[key] = data
                         data = '{' + key + '}'
-        elif isinstance(data, nbt.TAG_STRING):
+        elif isinstance(data, TAG) and data.id == nbt.TAG_STRING:
             if prefix_[-1] in self.end_tag or flag:
                 if bool(re.search(r'\S', data.lang)):
                     if not any(tag in data.lang for tag in self.stop_tag):
@@ -307,13 +330,14 @@ class FTBQuest:
 class BetterQuest:
     input_path = None
     quest = {}
-    lang = {}
     quest_local = {}
 
     def __init__(self, p: str):
+        self.lang = Lang()  # 提取出的语言文件
         self.input_path = p
         self.quest = parse_json_file(p)
-        self.quest_local, self.lang, _, _ = self.traverse_trans(self.quest)
+        self.quest_local, lang_dic, _, _ = self.traverse_trans(self.quest)
+        self.lang.set_lang(lang_dic, p)
 
     def traverse_trans(self, dictionary: dict, key_value=None, name_index=0, desc_index=0):
         if key_value is None:
@@ -350,41 +374,16 @@ class BetterQuest:
         return text
 
 
-class Mod:
-    def __init__(self, path):
-        self.path = path
-        self.modName = ''
-        self.langList = []
-        self.get_info()
-
-    def get_info(self):
-        with zipfile.ZipFile(self.path, 'r') as jar:
-            for file_info in jar.infolist():
-                name = file_info.filename
-                match1 = re.search(r"assets/([^/]+)", name)
-                if match1:
-                    self.modName = match1.group(1)
-                match2 = re.search(r"lang/([^/]+)", name)
-                if match2:
-                    self.langList.append(match2.group(1))
-
-    def get_lang_text(self, lang_name: str):
-        with zipfile.ZipFile(self.path, 'r') as jar:
-            for file_info in jar.infolist():
-                name = file_info.filename
-                if (r'lang/' + lang_name) in name:
-                    with jar.open(name) as json_file:
-                        content = json_file.read().decode('latin-1')
-                        return content
-
-
 class Translator(QObject):
+    api = cfg.get(cfg.translateApi)
     from_lang = ''
     to_lang = ''
     app_key = ''
     app_secret = ''
     model = None
     tokenizer = None
+    access_token = None
+    original = cfg.get(cfg.keepOriginal)
     spec_format = pyqtSignal(str)
 
     def __init__(self, from_lang: str, to_lang: str, key: str, secret: str):
@@ -393,6 +392,8 @@ class Translator(QObject):
         self.to_lang = to_lang
         self.app_key = key
         self.app_secret = secret
+        if self.api == '1':
+            self.init_local_model()  # 加载模型
 
     @staticmethod
     def bracket(m: re.Match):
@@ -420,7 +421,7 @@ class Translator(QObject):
             return None
         return line
 
-    def post_process(self, text_, translate, original=False):
+    def post_process(self, text_, translate):
         if self.model is None:
             pattern = re.compile(r'\[&&([a-z,0-9]|#[0-9,A-F]{6})]')
             translate = pattern.sub(self.debracket, translate)
@@ -435,15 +436,9 @@ class Translator(QObject):
                 translate = re.sub(MAGIC_WORD, quotes[count], translate, 1)
                 count = count + 1
                 index = translate.find(MAGIC_WORD)
-        if original:
-            replacement = translate + "[--" + text_ + "--]"
-            return replacement
-        return translate
+        return translate + "[--" + text_ + "--]" if self.original else translate
 
-    def baiduTranslate(self, text_: str, original=False):
-        text_process = self.pre_process(text_)
-        if text_process is None:
-            return text_
+    def get_access_token(self):
         url = "https://aip.baidubce.com/oauth/2.0/token"
         params = {
             "grant_type": "client_credentials",
@@ -453,7 +448,12 @@ class Translator(QObject):
         response = requests.get(url, params=params)
         result = response.json()
         access_token = result["access_token"]
+        return access_token
 
+    def baidu_translate(self, text_: str):
+        text_process = self.pre_process(text_)
+        if text_process is None:
+            return text_
         url_ = "https://aip.baidubce.com/rpc/2.0/mt/texttrans/v1"
         headers = {
             "Content-Type": "application/json;charset=utf-8"
@@ -463,79 +463,76 @@ class Translator(QObject):
             "to": self.to_lang,
             "q": text_process
         }
+        if not self.access_token:
+            self.get_access_token()
         params_ = {
-            "access_token": access_token
+            "access_token": self.access_token
         }
         response_ = requests.post(url_, headers=headers, params=params_, json=body)
         result_ = response_.json()
         try:
             translated_text = result_["result"]["trans_result"][0]["dst"]
         except Exception as e:
-            translated_text = ""
+            translated_text = f"翻译出错：{str(e)}"
 
-        return self.post_process(text_, translated_text, original)
+        return self.post_process(text_, translated_text)
 
     def init_local_model(self):
-        self.model = MarianMTModel.from_pretrained("./models/minecraft-en-zh")
-        self.tokenizer = MarianTokenizer.from_pretrained("./models/minecraft-en-zh")
+        pass
+        # self.model = MarianMTModel.from_pretrained("./models/minecraft-en-zh")
+        # self.tokenizer = MarianTokenizer.from_pretrained("./models/minecraft-en-zh")
 
-    def localTranslate(self, text_: str, original=False):
-        text_process = self.pre_process(text_)
-        if text_process is None:
-            return text_
-        input_ids = self.tokenizer.encode(text_process, return_tensors="pt")
-        translated = self.model.generate(input_ids, max_length=128)
-        output = self.tokenizer.decode(translated[0], skip_special_tokens=True)
-        return self.post_process(text_, output, original)
+    def local_translate(self, text_: str):
+        time.sleep(0.1)
+        return text_
+        # if not all([self.model, self.tokenizer]):
+        #     self.init_local_model()
+        # text_process = self.pre_process(text_)
+        # if text_process is None:
+        #     return text_
+        # input_ids = self.tokenizer.encode(text_process, return_tensors="pt")
+        # translated = self.model.generate(input_ids, max_length=128)
+        # output = self.tokenizer.decode(translated[0], skip_special_tokens=True)
+        # return self.post_process(text_, output)
 
-
-class LangTranslatorThread(QThread):
-    finished = pyqtSignal()
-    progress = pyqtSignal(int)
-    index = pyqtSignal(str)
-    info = pyqtSignal(str)
-    error = pyqtSignal(str)
-
-    def __init__(self, lang, from_lang, to_lang, app_key, app_secret, keepOriginal):
-        super().__init__()
-        self.lang = lang
-        self.translator = Translator(from_lang, to_lang, app_key, app_secret)
-        self.keepOriginal = keepOriginal
-
-    def run(self):
-        try:
-            api = cfg.get(cfg.translateApi)
-            self.translator.spec_format.connect(self.handle_emit_process_info)
-            if api == '1':
-                self.translator.init_local_model()
-            count = len(self.lang)
-            str_count = 0
-            for index in range(0, count):
-                progress = (index + 1) / count * 100
-                str_count += len(self.lang[index][1])
-                self.progress.emit(progress)
-                self.index.emit('翻译进度:%s,已耗字符：%s' % (str(index + 1), str(str_count)))
-                self.info.emit('正在翻译:%s' % self.lang[index][1])
-                trans = 'ChatGPT翻译尚在开发中，敬请期待！'
-                if api == '0':
-                    trans = self.translator.baiduTranslate(self.lang[index][1], self.keepOriginal)
-                elif api == '1':
-                    trans = self.translator.localTranslate(self.lang[index][1], self.keepOriginal)
-                self.lang[index][2] = trans
-                self.lang[index][3] = trans
-                self.info.emit('翻译结果为:%s' % trans)
-        except Exception as e:
-            self.error.emit(str(e))
+    @func_timer
+    def translate(self, text_: str):
+        if self.api == '0':
+            return self.baidu_translate(text_)
+        elif self.api == '1':
+            return self.local_translate(text_)
+        elif self.api == '2':
+            return 'ChatGPT翻译尚在开发中，敬请期待！'
         else:
-            self.finished.emit()
+            return text_
 
-    def stop(self):
-        self.terminate()
-        self.wait()
-        self.finished.emit()
 
-    def handle_emit_process_info(self, info: str):
-        self.info.emit(info)
+class Mod:
+    def __init__(self, path):
+        self.path = path
+        self.modName = ''
+        self.langList = []
+        self.get_info()
+
+    def get_info(self):
+        with zipfile.ZipFile(self.path, 'r') as jar:
+            for file_info in jar.infolist():
+                name = file_info.filename
+                match1 = re.search(r"assets/([^/]+)", name)
+                if match1:
+                    self.modName = match1.group(1)
+                match2 = re.search(r"lang/([^/]+)", name)
+                if match2:
+                    self.langList.append(match2.group(1))
+
+    def get_lang_text(self, lang_name: str):
+        with zipfile.ZipFile(self.path, 'r') as jar:
+            for file_info in jar.infolist():
+                name = file_info.filename
+                if (r'lang/' + lang_name) in name:
+                    with jar.open(name) as json_file:
+                        content = json_file.read().decode('latin-1')
+                        return content
 
 
 class ResourcePack:
@@ -575,3 +572,82 @@ class ACA:
         if res:
             res.sort(key=lambda i: len(i[1][0]), reverse=True)  # 按匹配到术语的长度递减排序
         return res[:5]
+
+
+class LangTranslateThread(QThread):
+    finished = pyqtSignal()
+    progress = pyqtSignal(int)
+    index = pyqtSignal(str)
+    info = pyqtSignal(str)
+    error = pyqtSignal(str)
+    remain_time = pyqtSignal(str)
+    count = 0  # 总条数
+    current_index = 0  # 当前指针
+
+    def __init__(self, lang, from_lang: str, to_lang: str, app_key: str, app_secret: str):
+        """
+        翻译Lang中原文，并放回其中
+        :param lang Lang或者list[Lang]
+        :param from_lang 源语言
+        :param to_lang 目标语言
+        :param app_key 百度翻译API
+        :param app_secret 百度翻译API
+        """
+        super().__init__()
+        self.lang = lang
+        self.translator = Translator(from_lang, to_lang, app_key, app_secret)
+        self.calculate_count()
+
+    def run(self):
+        try:
+            self.translator.spec_format.connect(self.handle_emit_process_info)
+            if isinstance(self.lang, list):
+                for lang in self.lang:
+                    self.trans(lang)
+            else:
+                self.trans(self.lang)
+        except Exception as e:
+            self.error.emit(str(e))
+        else:
+            self.finished.emit()
+
+    def trans(self, lang):
+        count = len(lang.lang_bilingual_list)
+        str_count = 0
+        for index in range(0, count):
+            self.current_index += 1
+            progress = (index + 1) / count * 100
+            str_count += len(lang.lang_bilingual_list[index][1])
+            self.progress.emit(progress)
+            self.index.emit('翻译进度:%s,已耗字符：%s' % (str(index + 1), str(str_count)))
+            self.info.emit('正在翻译:%s' % lang.lang_bilingual_list[index][1])
+            trans, single_run_time = self.translator.translate(lang.lang_bilingual_list[index][1])
+            self.remain_time.emit(self.estimated_time_remaining(single_run_time))
+            lang.lang_bilingual_list[index][2] = trans
+            lang.lang_bilingual_list[index][3] = trans
+            self.info.emit('翻译结果为:%s' % trans)
+        # 保存缓存文件
+        lang.save_cache()
+
+    def stop(self):
+        self.terminate()
+        self.wait()
+        self.finished.emit()
+
+    def handle_emit_process_info(self, info: str):
+        self.info.emit(info)
+
+    def estimated_time_remaining(self, single_run_time):
+        remain_time = (self.count - self.current_index) * single_run_time
+        seconds = remain_time % 60
+        minutes = (remain_time - seconds) / 60
+        return f"预计还需: %.f分%.f秒" % (minutes, seconds)
+
+    def calculate_count(self):
+        # 计算长度
+        if isinstance(self.lang, list):
+            for item in self.lang:
+                self.count += len(item.lang_bilingual_list)
+        else:
+            self.count = len(self.lang.lang_bilingual_list)
+        self.remain_time.emit(self.estimated_time_remaining(0.2))
