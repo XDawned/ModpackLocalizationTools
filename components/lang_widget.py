@@ -5,9 +5,9 @@ from pathlib import Path
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QKeySequence
 from PyQt5.QtWidgets import QVBoxLayout, QWidget, QTableWidgetItem, QHBoxLayout, QFrame, QLabel, \
-    QSpacerItem, QSizePolicy, QShortcut
+    QSpacerItem, QSizePolicy, QShortcut, QApplication
 from qfluentwidgets import TableWidget, TextEdit, PushButton, SearchLineEdit, LineEdit, ScrollArea, ExpandLayout, \
-    FluentIcon
+    FluentIcon, InfoBar
 
 from common.config import cfg
 from common.style_sheet import StyleSheet
@@ -50,7 +50,7 @@ class BrowseLangWidget(Frame):
         # self.table.setColumnCount(3)
         self.table.setColumnCount(2)
         self.table.setRowCount(len(self.data))
-        self.table.setColumnWidth(0, 100)
+        self.table.setColumnWidth(0, 300)
         # self.table.setColumnWidth(1, 300)
         self.update_table(self.data)
         # self.table.cellChanged.connect(self.handleCellChanged)
@@ -192,7 +192,7 @@ class ReviewLangWidget(ScrollArea):
         self.suggestPanel = SuggestCardWidget(self.scrollWidget)
         # self.suggestPanel.addCard(author='离线翻译', trans='苹果', ori='apple', icon=FluentIcon.GLOBE)
         # self.suggestPanel.addCard(author='百度翻译', trans='苹果', ori='apple', icon=FluentIcon.GLOBE)
-        self.suggestPanel.clickSignal.connect(self.text_edit_trans.setHtml)
+        self.suggestPanel.clickSignal.connect(self.copy_text)
 
         self.expandLayout.setSpacing(28)
         self.expandLayout.setContentsMargins(36, 10, 36, 0)
@@ -207,11 +207,22 @@ class ReviewLangWidget(ScrollArea):
         # self.setLayout(layout)
         self.update_data()
 
+    def copy_text(self, text):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        InfoBar.success(
+            self.tr('已复制到剪切板'),
+            self.tr(''),
+            duration=1500,
+            parent=self
+        )
+
+
     def update_table(self, data):
         self.data_array = data
         self.current_index = 0
         self.str_count_all = 0
-        self.get_all_cache_dic()
+        # self.get_all_cache_dic()
         for i in data:
             self.str_count_all += len(i[1])
         self.update_data()
