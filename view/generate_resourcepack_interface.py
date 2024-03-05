@@ -148,7 +148,7 @@ class GenerateResourcepackInterface(ScrollArea):
             self.tr('提取中'), self.tr('请耐心等待'), self.window())
         self.stateTooltip.move(self.stateTooltip.getSuitablePos())
         self.stateTooltip.show()
-        self.processThread = ProcessThread(self.packFolder)
+        self.processThread = GenerateResourcePackThread(self.packFolder)
         self.processThread.finished.connect(self.on_process_finished)
         self.processThread.error.connect(self.on_process_failed)
         self.processThread.start()
@@ -172,7 +172,7 @@ class GenerateResourcepackInterface(ScrollArea):
         print(error_msg)
 
 
-class ProcessThread(QThread):
+class GenerateResourcePackThread(QThread):
     finished = pyqtSignal()
     error = pyqtSignal(str)
     packmeta = {
