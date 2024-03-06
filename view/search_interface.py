@@ -6,6 +6,7 @@ from qfluentwidgets import (ScrollArea, SearchLineEdit, InfoBar, TreeWidget)
 
 from common.style_sheet import StyleSheet
 from common.util import parse_json_file, find_similar_terms
+from common.terms_dict import TERMS
 
 
 class SearchDictInterface(ScrollArea):
@@ -47,7 +48,6 @@ class SearchDictInterface(ScrollArea):
         self.tree.itemClicked.connect(self.copy_text)
 
         self.view.setObjectName('view')
-        StyleSheet.GALLERY_INTERFACE.apply(self)
 
     def update_table(self, data):
         self.tree.clear()
@@ -60,9 +60,8 @@ class SearchDictInterface(ScrollArea):
         self.tree.expandAll()
 
     def handle_search(self):
-        term_dict = parse_json_file('./common/Dict-Mini.json')
         term = self.lineEdit.text()
-        result = find_similar_terms(term, term_dict)
+        result = find_similar_terms(term, TERMS)
         if result:
             self.update_table(result)
         else:
@@ -93,7 +92,7 @@ class SearchCacheInterface(ScrollArea):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.term_dict = parse_json_file('./common/Dict-Mini.json')
+        self.term_dict = TERMS
 
         self.setFixedWidth(300)
         self.view = QWidget(self)
@@ -126,7 +125,6 @@ class SearchCacheInterface(ScrollArea):
         self.tree.itemClicked.connect(self.copy_text)
 
         self.view.setObjectName('view')
-        StyleSheet.GALLERY_INTERFACE.apply(self)
 
     def update_table(self, data):
         self.tree.clear()
