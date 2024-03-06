@@ -60,5 +60,5 @@ class FolderListCard(ExpandSettingCard):
             item = self.viewLayout.takeAt(0)
             widget = item.widget()
             if widget is not None:
-                self.viewLayout.deleteWidget(widget)
+                self.viewLayout.removeWidget(widget)
         self._adjustViewSize()
