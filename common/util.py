@@ -20,6 +20,7 @@ from nbt.nbt import TAG
 # from transformers import MarianTokenizer, MarianMTModel
 
 from common.config import cfg
+from common.terms_dict import TERMS
 
 MAGIC_WORD = r'{xdawned}'  # 先在术语库中记录，保证其不被翻译
 
@@ -445,10 +446,10 @@ class Translator(QObject):
             "client_id": self.app_key,
             "client_secret": self.app_secret
         }
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=3)
         result = response.json()
         access_token = result["access_token"]
-        return access_token
+        self.access_token = access_token
 
     def baidu_translate(self, text_: str):
         text_process = self.pre_process(text_)
@@ -468,13 +469,12 @@ class Translator(QObject):
         params_ = {
             "access_token": self.access_token
         }
-        response_ = requests.post(url_, headers=headers, params=params_, json=body)
+        response_ = requests.post(url_, headers=headers, params=params_, json=body, timeout=5)
         result_ = response_.json()
         try:
             translated_text = result_["result"]["trans_result"][0]["dst"]
         except Exception as e:
             translated_text = f"翻译出错：{str(e)}"
-
         return self.post_process(text_, translated_text)
 
     def init_local_model(self):
@@ -483,8 +483,8 @@ class Translator(QObject):
         # self.tokenizer = MarianTokenizer.from_pretrained("./models/minecraft-en-zh")
 
     def local_translate(self, text_: str):
-        time.sleep(0.1)
-        return text_
+        time.sleep(0.2)
+        return 'Alpha版本，仅供测试使用！'
         # if not all([self.model, self.tokenizer]):
         #     self.init_local_model()
         # text_process = self.pre_process(text_)
@@ -557,8 +557,7 @@ class ACA:
     aca = ahocorasick.Automaton()
 
     def __init__(self):
-        data = parse_json_file('./common/Dict-Mini.json')
-        for k, v in data.items():
+        for k, v in TERMS.items():
             k = k.lower()  # 统一大小写
             if len(k) > 3:  # 排除长度小于3的词汇
                 self.aca.add_word(k, (k, v))
@@ -607,6 +606,7 @@ class LangTranslateThread(QThread):
             else:
                 self.trans(self.lang)
         except Exception as e:
+            raise e
             self.error.emit(str(e))
         else:
             self.finished.emit()

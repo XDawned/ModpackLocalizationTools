@@ -228,11 +228,13 @@ class WorkInterface(ScrollArea):
                 if "zh_cn" not in file.lower():
                     ext = os.path.splitext(file)[1].lower()
                     file_path = os.path.join(root, file)
-                    if ext in ['json', 'lang']:
+                    if ext in ['.json', '.lang']:
                         if "betterquesting" in root and ext == '.json':
                             lang.append(BetterQuest(file_path).lang)
                         else:
-                            lang.append(Lang().read_lang(file_path))
+                            lang_ = Lang()
+                            lang_.read_lang(file_path)
+                            lang.append(lang_)
                     elif ext == '.snbt':
                         lang.append(FTBQuest(file_path).lang)
                     else:

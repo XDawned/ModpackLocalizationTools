@@ -22,43 +22,42 @@ class FolderListCard(ExpandSettingCard):
         self.viewLayout.setAlignment(Qt.AlignTop)
         self.viewLayout.setContentsMargins(0, 0, 0, 0)
         for folder in self.folders:
-            self.__addFolderItem(folder)
+            self.__add_folder_item(folder)
 
-    def updateFolder(self, folders):
-        self.__removeAllFolderWidget()
+    def update_folder(self, folders):
+        self.__remove_all_folder_widget()
         self.folders = folders
         for folder in folders:
-            self.__addFolderItem(folder)
+            self.__add_folder_item(folder)
         self._adjustViewSize()
 
-    def __addFolderItem(self, folder: str):
+    def __add_folder_item(self, folder: str):
         item = FolderItem(folder, self.view)
-        item.removed.connect(self.__showConfirmDialog)
+        item.removed.connect(self.__show_confirm_dialog)
         self.viewLayout.addWidget(item)
         self._adjustViewSize()
 
-    def __showConfirmDialog(self, item: FolderItem):
-        """ show confirm dialog """
+    def __show_confirm_dialog(self, item: FolderItem):
         name = Path(item.folder).name
         title = self.tr('确认删除此文件？')
         content = self.tr("提取本地键将不考虑 ") + f'"{name}"' + \
                   self.tr(",此操作不删除本地文件")
         w = Dialog(title, content, self.window())
-        w.yesSignal.connect(lambda: self.__removeFolder(item))
+        w.yesSignal.connect(lambda: self.__remove_folder(item))
         w.exec_()
 
-    def __removeFolder(self, item: FolderItem):
+    def __remove_folder(self, item: FolderItem):
         if item.folder not in self.folders:
             return
         self.folders.remove(item.folder)
-        self.viewLayout.deleteWidget(item)
+        self.viewLayout.removeWidget(item)
         self._adjustViewSize()
 
-    def __removeAllFolderWidget(self):
+    def __remove_all_folder_widget(self):
         self.folders = []
         while self.viewLayout.count():
             item = self.viewLayout.takeAt(0)
             widget = item.widget()
             if widget is not None:
-                self.viewLayout.deleteWidget(widget)
+                self.viewLayout.removeWidget(widget)
         self._adjustViewSize()

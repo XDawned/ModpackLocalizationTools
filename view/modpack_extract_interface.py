@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 
+import snbtlib
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QLabel, QFileDialog
 from qfluentwidgets import FluentIcon as FIF
@@ -265,16 +266,16 @@ class ProcessThread(QThread):
             if len(self.ftbq_list) > 0:
                 for ftbq in self.ftbq_list:
                     quest = FTBQuest(ftbq)
-                    if 'reward_tables' in str(quest.input_path):  # 奖励表不处理
-                        continue
                     if quest.quest_name in ['data', 'chapter_groups']:
-                        quest_local_path = self.work_folder + '/ftbquests/local/' + quest.quest_name + '.snbt'
+                        quest_local_path = self.work_folder + '/ftbquests/local/' + \
+                                           quest.quest_name + '.snbt' if quest.quest_type < 2 else '.nbt'
                     else:
-                        quest_local_path = self.work_folder + '/ftbquests/local/chapters/' + quest.quest_name + '.snbt'
-                    quest.save_quest_local(quest_local_path)
-                    ftbq_lang.update(quest.lang)
+                        quest_local_path = self.work_folder + '/ftbquests/local/chapters/' +\
+                                           quest.quest_name + '.snbt' if quest.quest_type < 2 else '.nbt'
+                    save_file(snbtlib.dumps(quest.quest_local), quest_local_path)
+                    ftbq_lang.update(quest.lang.lang_dic)
                 quest_lang_path = self.work_folder + '/ftbquests/lang/en_us.json'
-                save_file(json.dumps(ftbq_lang, indent=1, ensure_ascii=False), quest_lang_path)
+                save_file(json.dumps(ftbq_lang, indent=2, ensure_ascii=False), quest_lang_path)
 
             bq_lang = {}
             if len(self.bq_list) > 0:
@@ -282,9 +283,9 @@ class ProcessThread(QThread):
                     quest = BetterQuest(bq)
                     quest_local_path = self.work_folder + '/betterquesting/local/DefaultQuests.json'
                     save_file(quest.dumps(quest.quest_local), quest_local_path)
-                    bq_lang.update(quest.lang)
+                    bq_lang.update(quest.lang.lang_dic)
                 quest_lang_path = self.work_folder + '/betterquesting/lang/en_us.json'
-                save_file(json.dumps(bq_lang, indent=1, ensure_ascii=False), quest_lang_path)
+                save_file(json.dumps(bq_lang, indent=2, ensure_ascii=False), quest_lang_path)
         except Exception as e:
             self.error.emit(str(e))
         else:
