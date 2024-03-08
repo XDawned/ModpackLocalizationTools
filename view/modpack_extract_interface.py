@@ -152,9 +152,9 @@ class ModpackExtractInterface(ScrollArea):
         self.un_trans_mod_list = self.checkThread.un_trans_mod_list
         self.ftbq_list = self.checkThread.ftbq_list
         self.bq_list = self.checkThread.bq_list
-        self.modFolderCard.updateFolder(mod.path for mod in self.un_trans_mod_list)
-        self.ftbqFolderCard.updateFolder(self.ftbq_list)
-        self.bqFolderCard.updateFolder(self.bq_list)
+        self.modFolderCard.update_folder(mod.path for mod in self.un_trans_mod_list)
+        self.ftbqFolderCard.update_folder(self.ftbq_list)
+        self.bqFolderCard.update_folder(self.bq_list)
 
     def generate_lang(self):
         title = self.tr('注意混淆')

@@ -25,6 +25,11 @@ class Config(QConfig):
         "TranslateApi", "TranslateApi", "百度翻译", OptionsValidator(["0", "1", "2"]), restart=True)
     appKey = ConfigItem("TranslateApi", "AppKey", 'Your APP_KEY')
     appSecret = ConfigItem("TranslateApi", "AppSecret", 'Your APP_SECRET')
+    # openapi
+    orgId = ConfigItem("TranslateApi", "OrgId", 'Your OrgId')
+    secretKey = ConfigItem("TranslateApi", "SecretKey", 'Your SecretKey')
+    openaiUrl = ConfigItem("OpenaiUrl", "OpenaiUrl", 'https://api.openai.com/v1')
+    modelName = ConfigItem("ModelName", "ModelName", 'gpt-3.5-turbo')
 
     activateCode = ConfigItem("Activate", "ActivateCode", 'Your ActivateCode')
     # 游戏版本

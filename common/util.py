@@ -10,6 +10,7 @@ from collections import OrderedDict
 from functools import wraps
 from pathlib import Path
 
+from openai import OpenAI
 import ahocorasick
 import requests
 import snbtlib
@@ -386,6 +387,8 @@ class Translator(QObject):
     access_token = None
     original = cfg.get(cfg.keepOriginal)
     spec_format = pyqtSignal(str)
+    client = None
+    model_name = cfg.get(cfg.modelName)
 
     def __init__(self, from_lang: str, to_lang: str, key: str, secret: str):
         super().__init__()
@@ -495,6 +498,39 @@ class Translator(QObject):
         # output = self.tokenizer.decode(translated[0], skip_special_tokens=True)
         # return self.post_process(text_, output)
 
+    def init_openai_model(self):
+        self.client = OpenAI(
+            base_url=cfg.get(cfg.openaiUrl),
+            organization=cfg.get(cfg.orgId),
+            timeout=10,
+            api_key=cfg.get(cfg.secretKey)
+        )
+
+    @staticmethod
+    def generate_prompt(text: str) -> str:
+        ref_data = [f'{item[1][0]}:{str(item[1][1])}' for item in global_aca.find(text.lower())]
+        ref_prefix = '\n'.join(ref_data)
+        prompt_dict = {
+            "tasks": f"Translate the text below about minecraft into Chinese\n"
+                     f"You can choose whether to refer to the following terms based on the context yourself:\n"
+                     f"Do not return any other conten besides the translated text\n",
+            "terms": ref_prefix,
+            "text": text
+        }
+        prompt = json.dumps(prompt_dict, indent=2, ensure_ascii=False)
+        return prompt
+
+    def gpt_translate(self, text_: str):
+        params = dict(
+            model=self.model_name,
+            messages=[{"role": "user", "content": self.generate_prompt(text_)}],
+            timeout=10
+        )
+        if not self.client:
+            self.init_openai_model()
+        completion = self.client.chat.completions.create(**params)
+        return completion.choices[0].message.content
+
     @func_timer
     def translate(self, text_: str):
         if self.api == '0':
@@ -502,7 +538,7 @@ class Translator(QObject):
         elif self.api == '1':
             return self.local_translate(text_)
         elif self.api == '2':
-            return 'ChatGPT翻译尚在开发中，敬请期待！'
+            return self.gpt_translate(text_)
         else:
             return text_
 
@@ -571,6 +607,9 @@ class ACA:
         if res:
             res.sort(key=lambda i: len(i[1][0]), reverse=True)  # 按匹配到术语的长度递减排序
         return res[:5]
+
+
+global_aca = ACA()
 
 
 class LangTranslateThread(QThread):

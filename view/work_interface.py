@@ -192,7 +192,6 @@ class WorkInterface(ScrollArea):
                     parent=self
                 )
         except Exception as e:
-            raise e
             InfoBar.error(
                 self.tr('错误'),
                 self.tr(str(e)),
