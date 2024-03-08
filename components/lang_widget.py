@@ -11,8 +11,9 @@ from qfluentwidgets import TableWidget, TextEdit, PushButton, SearchLineEdit, Li
 
 from common.config import cfg
 from common.style_sheet import StyleSheet
-from common.util import merge_dicts, parse_json_file, ACA
+from common.util import merge_dicts, parse_json_file, ACA, global_aca
 from components.link_card import SuggestCardWidget
+from components.mc_color_edit import McColorEdit
 
 
 class Frame(QFrame):
@@ -117,7 +118,7 @@ class ReviewLangWidget(ScrollArea):
         self.current_index = 0
         self.str_count_all = 0
         self.translator_thread = None
-        self.aca = ACA()
+        self.aca = global_aca
 
         self.init_ui()
 
@@ -130,9 +131,9 @@ class ReviewLangWidget(ScrollArea):
         self.setWidget(self.scrollWidget)
         self.setWidgetResizable(True)
 
-        self.text_edit_ori = TextEdit(self.scrollWidget)
+        self.text_edit_ori = McColorEdit(self.scrollWidget)
         self.text_edit_ori.setReadOnly(True)
-        self.text_edit_trans = TextEdit(self.scrollWidget)
+        self.text_edit_trans = McColorEdit(self.scrollWidget)
 
         self.text_edit_ori.setFixedHeight(100)
         self.text_edit_trans.setFixedHeight(100)
@@ -236,7 +237,9 @@ class ReviewLangWidget(ScrollArea):
                 if len(data) >= 3:
                     self.label_key.setText('' + data[0])
                     self.text_edit_ori.setHtml(data[1])
+                    self.text_edit_ori.fresh_color()
                     self.text_edit_trans.setHtml(data[2])
+                    self.text_edit_trans.fresh_color()
                     self.current_edit_info.setText(
                         '此节字符：%d     总字符：%d' % (len(self.data_array[self.current_index][1]), self.str_count_all))
                     self.dataUpdated.emit(self.data_array[self.current_index][1])
