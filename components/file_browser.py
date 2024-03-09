@@ -63,8 +63,6 @@ class FileBrowser(QScrollArea):
         self.tree_view.hideColumn(3)
         self.tree_view.setRootIndex(self.model.index(folder))
 
-        self.on_choose_project_label_clicked(1)
-
         self.v_box_layout.addWidget(self.label_choose_project_tip)
         self.v_box_layout.addWidget(self.label_choose_project)
         self.v_box_layout.addWidget(self.tree_view)
