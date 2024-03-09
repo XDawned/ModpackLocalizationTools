@@ -2,9 +2,10 @@
 import json
 import os.path
 
-from PyQt5.QtCore import Qt, pyqtSignal, QFile
+from PyQt5.QtCore import Qt, pyqtSignal, QFile, QDir
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QVBoxLayout, QFileSystemModel, QLabel, QFileDialog, \
-    QItemDelegate, QCheckBox, QScrollArea, QInputDialog
+    QItemDelegate, QCheckBox, QScrollArea, QInputDialog, QShortcut, QMenu
 from qfluentwidgets import FluentIcon as FIF
 from qfluentwidgets import TreeView, Action, RoundMenu, MessageBox, LineEdit, InfoBar, \
     InfoBarPosition
@@ -33,6 +34,7 @@ class CheckBoxDelegate(QItemDelegate):
 
 class FileBrowser(QScrollArea):
     chooseFile = pyqtSignal(str)
+    chooseFolder = pyqtSignal(str)
 
     def __init__(self, configItem, parent=None):
         super().__init__(parent=parent)
@@ -42,15 +44,16 @@ class FileBrowser(QScrollArea):
         # 垂直布局
         self.v_box_layout = QVBoxLayout(self)
         # 控件
-        self.label1 = QLabel('当前目录(点击下方地址切换)', self)
-        self.label2 = QLabel(folder, self)
-        self.label2.setWordWrap(True)
-        self.label2.mousePressEvent = self.onLabel2Clicked
+        self.label_choose_project_tip = QLabel('当前目录(点击下方地址切换)', self)
+        self.label_choose_project = QLabel(folder, self)
+        self.label_choose_project.setWordWrap(True)
+        self.label_choose_project.mousePressEvent = self.on_choose_project_label_clicked
         self.model = QFileSystemModel()
         self.model.setRootPath(folder)
         # 过滤
-        # self.model.setNameFilters(['*.snbt', '*.json', ])
-        self.model.setNameFilterDisables(False)
+        # self.model.setFilter(QDir.QF)
+        # self.model.setNameFilters(['*.snbt', '*.json', '*.nbt', '*.lang'])
+        # self.model.setNameFilterDisables(False)
         # 展示
         self.tree_view = TreeView(self)
         self.tree_view.setModel(self.model)
@@ -60,51 +63,71 @@ class FileBrowser(QScrollArea):
         self.tree_view.hideColumn(3)
         self.tree_view.setRootIndex(self.model.index(folder))
 
-        self.v_box_layout.addWidget(self.label1)
-        self.v_box_layout.addWidget(self.label2)
+        self.v_box_layout.addWidget(self.label_choose_project_tip)
+        self.v_box_layout.addWidget(self.label_choose_project)
         self.v_box_layout.addWidget(self.tree_view)
+
         # 设置 CheckboxDelegate 为 delegate
         # delegate = CheckBoxDelegate()
         # self.tree_view.setItemDelegate(delegate)
-
+        # 配置双击事件
+        self.tree_view.doubleClicked.connect(self.tree_clicked)
+        # 添加快捷键
+        shortcut_previous_file = QShortcut(QKeySequence("Ctrl+W"), self.tree_view)
+        shortcut_next_file = QShortcut(QKeySequence("Ctrl+S"), self.tree_view)
+        shortcut_previous_file.activated.connect(lambda: self.handle_select_file(-1))
+        shortcut_next_file.activated.connect(lambda: self.handle_select_file(1))
         # 添加右键菜单
         self.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree_view.customContextMenuRequested.connect(self.show_context_menu)
 
-        # 创建右键菜单
-        self.context_menu = RoundMenu(parent=self)
-        self.rename_action = Action(FIF.SYNC, "重命名", self)
-        self.create_folder_action = Action(FIF.ADD, "新建文件夹", self)
-        self.delete_action = Action(FIF.CLOSE, "删除", self)
-        self.submenu = RoundMenu("额外工具", self)
-        self.submenu.setIcon(FIF.BOOK_SHELF)
-        self.json_to_lang_action = Action(FIF.CARE_DOWN_SOLID, "JSON转LANG", self)
-        self.lang_to_json_action = Action(FIF.CARE_UP_SOLID, "LANG转JSON", self)
-        self.context_menu.addAction(self.rename_action)
-        self.context_menu.addAction(self.create_folder_action)
-        self.context_menu.addAction(self.delete_action)
-        self.submenu.addActions([
-            self.json_to_lang_action,
-            self.lang_to_json_action,
-        ])
-        self.context_menu.addMenu(self.submenu)
-        # 连接信号与槽函数
-        self.rename_action.triggered.connect(self.rename_file)
-        self.create_folder_action.triggered.connect(self.create_folder)
-        self.json_to_lang_action.triggered.connect(self.json_to_lang)
-        self.lang_to_json_action.triggered.connect(self.lang_to_json)
-        self.delete_action.triggered.connect(self.delete_file)
-        self.tree_view.doubleClicked.connect(self.tree_clicked)
+
         # 应用qss
         self.tree_view.setObjectName('treeView')
-        self.label1.setObjectName('label1')
-        self.label2.setObjectName('label2')
+        self.label_choose_project_tip.setObjectName('label1')
+        self.label_choose_project.setObjectName('label2')
         StyleSheet.FILE_BROWSER.apply(self)
 
     def show_context_menu(self, point):
         index = self.tree_view.indexAt(point)
         if index.isValid():
-            self.context_menu.exec_(self.tree_view.viewport().mapToGlobal(point))
+            file_path = self.model.filePath(index)
+            context_menu = self.create_context_menu() if os.path.isfile(file_path) else self.create_context_menu(False)
+            context_menu.exec_(self.tree_view.viewport().mapToGlobal(point))
+
+    def create_context_menu(self, is_file=True):
+        # 创建右键菜单
+        context_menu = RoundMenu(parent=self)
+        rename_action = Action(FIF.SYNC, "重命名", self)
+        create_folder_action = Action(FIF.ADD, "新建文件夹", self)
+        delete_action = Action(FIF.CLOSE, "删除", self)
+        context_menu.addAction(rename_action)
+        context_menu.addAction(create_folder_action)
+        context_menu.addAction(delete_action)
+        # 区分右键区域
+        if is_file:
+            submenu = RoundMenu("额外工具", self)
+            submenu.setIcon(FIF.BOOK_SHELF)
+            json_to_lang_action = Action(FIF.CARE_DOWN_SOLID, "JSON转LANG", self)
+            lang_to_json_action = Action(FIF.CARE_UP_SOLID, "LANG转JSON", self)
+            submenu.addActions([
+                json_to_lang_action,
+                lang_to_json_action,
+            ])
+            json_to_lang_action.triggered.connect(self.json_to_lang)
+            lang_to_json_action.triggered.connect(self.lang_to_json)
+            context_menu.addMenu(submenu)
+        else:
+            choose_folder_action = Action(FIF.CAR, "批量预翻译", self)
+            choose_folder_action.triggered.connect(self.handle_select_folder)
+            context_menu.addAction(choose_folder_action)
+        # 连接信号与槽函数
+        rename_action.triggered.connect(self.rename_file)
+        create_folder_action.triggered.connect(self.create_folder)
+
+        delete_action.triggered.connect(self.delete_file)
+        return context_menu
+
 
     def rename_file(self):
         index = self.tree_view.currentIndex()
@@ -281,23 +304,47 @@ class FileBrowser(QScrollArea):
                     parent=self.parent()
                 )
 
-    def onLabel2Clicked(self, t):
+    def on_choose_project_label_clicked(self, t):
         folder = QFileDialog.getExistingDirectory(
-            self, self.tr("请选择目录"), "./")
-        if not folder or cfg.get(self.configItem) == folder:
+            self, self.tr("请选择工作目录(存放待翻译的文件)"), "./")
+        if not folder:
             return
         cfg.set(self.configItem, folder)
-        self.freshFileBrowser()
+        self.fresh_file_browser()
+        self.check_project_config(folder)
 
-    def freshFileBrowser(self):
+    @staticmethod
+    def check_project_config(folder):
+        # 生成项目配置文件目录
+        project_config_path = f'{folder}/.mplt'
+        if not os.path.exists(project_config_path):
+            os.mkdir(project_config_path)
+
+    def fresh_file_browser(self):
         folder = cfg.get(self.configItem)
-        self.label2.setText(folder)
+        self.label_choose_project.setText(folder)
         self.model.setRootPath(folder)
         self.tree_view.setRootIndex(self.model.index(folder))
+        self.tree_view.setRowHidden(0, self.model.index(folder), True)
 
     def tree_clicked(self, Qmodelidx):
         file_path = self.model.filePath(Qmodelidx)
         if os.path.isfile(file_path):
             self.chooseFile.emit(file_path)
-        # print(self.model.fileName(Qmodelidx))
-        # print(self.model.fileInfo(Qmodelidx))
+
+    def handle_select_file(self, step: int):
+        index = self.tree_view.currentIndex()
+        new_index = index.sibling(index.row() + step, index.column())
+        if new_index.isValid():
+            file_path = self.model.filePath(new_index)
+            if os.path.isfile(file_path):
+                self.tree_view.setCurrentIndex(new_index)
+                self.tree_clicked(new_index)
+
+    def handle_select_folder(self, step: int):
+        index = self.tree_view.currentIndex()
+        new_index = index.sibling(index.row() + step, index.column())
+        if new_index.isValid():
+            file_path = self.model.filePath(new_index)
+            if not os.path.isfile(file_path):
+                self.chooseFolder.emit(file_path)

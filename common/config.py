@@ -22,15 +22,20 @@ class Config(QConfig):
     lowVersionLangFormat = ConfigItem("LangFormat", "LowVersionLangFormat", False, BoolValidator())
     # 翻译API
     translateApi = OptionsConfigItem(
-        "TranslateApi", "TranslateApi", "百度翻译", OptionsValidator(["0", "1", "2"]), restart=True)
+        "TranslateApi", "TranslateApi", "1", OptionsValidator(["0", "1", "2"]))
     appKey = ConfigItem("TranslateApi", "AppKey", 'Your APP_KEY')
     appSecret = ConfigItem("TranslateApi", "AppSecret", 'Your APP_SECRET')
+    # openapi
+    orgId = ConfigItem("TranslateApi", "OrgId", 'Your OrgId')
+    secretKey = ConfigItem("TranslateApi", "SecretKey", 'Your SecretKey')
+    openaiUrl = ConfigItem("OpenaiUrl", "OpenaiUrl", 'https://api.openai.com/v1')
+    modelName = ConfigItem("ModelName", "ModelName", 'gpt-3.5-turbo')
 
     activateCode = ConfigItem("Activate", "ActivateCode", 'Your ActivateCode')
     # 游戏版本
     gameVersion = OptionsConfigItem("Meta", "GameVersion", "6", OptionsValidator(["1", "2", "3", "4", "11", "12",
                                                                                   "5", "6", "7", "8", "9", "13", "14",
-                                                                                  "15"]), restart=True)
+                                                                                  "15"]))
     # 资源包名称
     metaName = ConfigItem("Meta", "Name", 'Modpack-Localization-Pack')
     # 资源包介绍
@@ -39,9 +44,9 @@ class Config(QConfig):
     iconPath = ConfigItem("Meta", "Icon", "./work/pack.png")
 
 
-YEAR = 2023
+YEAR = 2024
 AUTHOR = "XDawned"
-VERSION = 'v1.0.0'
+VERSION = 'v1.1.0'
 HELP_URL = "https://github.com/XDawned"
 REPO_URL = "https://github.com/XDawned"
 EXAMPLE_URL = "https://github.com/XDawned"

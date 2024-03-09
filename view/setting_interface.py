@@ -2,7 +2,7 @@
 from PyQt5.QtCore import Qt, pyqtSignal, QUrl
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QWidget, QLabel, QFileDialog
-from qfluentwidgets import FluentIcon as FIF
+from qfluentwidgets import FluentIcon as FIF, OptionsConfigItem
 from qfluentwidgets import InfoBar
 from qfluentwidgets import (SettingCardGroup, SwitchSettingCard, OptionsSettingCard, PushSettingCard,
                             HyperlinkCard, PrimaryPushSettingCard, ScrollArea, ExpandLayout, CustomColorSettingCard,
@@ -71,15 +71,16 @@ class SettingInterface(ScrollArea):
             self.tr("选择使用的翻译API"),
             texts=[
                 self.tr('百度翻译'), self.tr('离线翻译')
-                # ,self.tr('ChatGPT')
+                , self.tr('OpenAI')
             ],
             parent=self.translateGroup
         )
+
         self.appKeyCard = PushEditSettingCard(
             self.tr('保存'),
             FIF.BRUSH,
             self.tr('AppKey'),
-            self.tr('请在这里输入你的翻译api的AppKey'),
+            self.tr('请在这里输入你的百度翻译api的AppKey'),
             self.tr('MyAppKey'),
             cfg.appKey,
             self.translateGroup
@@ -89,9 +90,45 @@ class SettingInterface(ScrollArea):
             self.tr('保存'),
             FIF.BRUSH,
             self.tr('AppSecret'),
-            self.tr('请在这里输入你的翻译api的AppSecret'),
+            self.tr('请在这里输入你的百度翻译api的AppSecret'),
             self.tr('MyAppSecret'),
             cfg.appSecret,
+            self.translateGroup
+        )
+        self.openaiUrlCard = PushEditSettingCard(
+            self.tr('保存'),
+            FIF.BRUSH,
+            self.tr('接口地址'),
+            self.tr('请在这里输入你OpenAI接口地址'),
+            self.tr('openAiUrl'),
+            cfg.openaiUrl,
+            self.translateGroup
+        )
+        self.modelNameCard = PushEditSettingCard(
+            self.tr('保存'),
+            FIF.BRUSH,
+            self.tr('模型名称'),
+            self.tr('请在这里输入你的OpenAI模型名称'),
+            self.tr('modelName'),
+            cfg.modelName,
+            self.translateGroup
+        )
+        self.orgIdCard = PushEditSettingCard(
+            self.tr('保存'),
+            FIF.BRUSH,
+            self.tr('OrganizationID'),
+            self.tr('请在这里输入你的OpenAI组织名(本地模型可不填)'),
+            self.tr('OrganizationID'),
+            cfg.orgId,
+            self.translateGroup
+        )
+        self.secretKeyCard = PushEditSettingCard(
+            self.tr('保存'),
+            FIF.BRUSH,
+            self.tr('SecretKey'),
+            self.tr('请在这里输入你的OpenAI密钥(本地模型可不填)'),
+            self.tr('SecretKey'),
+            cfg.secretKey,
             self.translateGroup
         )
 
@@ -212,6 +249,10 @@ class SettingInterface(ScrollArea):
         self.translateGroup.addSettingCard(self.translateAPICard)
         self.translateGroup.addSettingCard(self.appKeyCard)
         self.translateGroup.addSettingCard(self.appSecretCard)
+        self.translateGroup.addSettingCard(self.openaiUrlCard)
+        self.translateGroup.addSettingCard(self.modelNameCard)
+        self.translateGroup.addSettingCard(self.orgIdCard)
+        self.translateGroup.addSettingCard(self.secretKeyCard)
 
         self.personalGroup.addSettingCard(self.themeCard)
         self.personalGroup.addSettingCard(self.themeColorCard)
@@ -234,6 +275,9 @@ class SettingInterface(ScrollArea):
         self.expandLayout.addWidget(self.activateSoftwareGroup)
         self.expandLayout.addWidget(self.updateSoftwareGroup)
         self.expandLayout.addWidget(self.aboutGroup)
+
+        self.handle_api_change(self.translateAPICard.configItem)
+        self.translateAPICard.optionChanged.connect(self.handle_api_change)
 
     def __showRestartTooltip(self):
         InfoBar.success(
@@ -296,7 +340,6 @@ class SettingInterface(ScrollArea):
                 parent=self
             )
 
-
     def __connectSignalToSlot(self):
         """ connect signal to slot """
         if not activate.activate:
@@ -315,3 +358,27 @@ class SettingInterface(ScrollArea):
         self.aboutCard.clicked.connect(self.checkUpdateSig)
         self.feedbackCard.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(FEEDBACK_URL)))
+
+    def handle_api_change(self, option):
+        if option.value == '0':
+            self.secretKeyCard.setVisible(False)
+            self.orgIdCard.setVisible(False)
+            self.openaiUrlCard.setVisible(False)
+            self.modelNameCard.setVisible(False)
+            self.appKeyCard.setVisible(True)
+            self.appSecretCard.setVisible(True)
+        elif option.value == '1':
+            self.appKeyCard.setVisible(False)
+            self.appSecretCard.setVisible(False)
+            self.secretKeyCard.setVisible(False)
+            self.orgIdCard.setVisible(False)
+            self.openaiUrlCard.setVisible(False)
+            self.modelNameCard.setVisible(False)
+        elif option.value == '2':
+            self.appKeyCard.setVisible(False)
+            self.appSecretCard.setVisible(False)
+            self.secretKeyCard.setVisible(True)
+            self.orgIdCard.setVisible(True)
+            self.openaiUrlCard.setVisible(True)
+            self.modelNameCard.setVisible(True)
+        self.translateGroup.adjustSize()

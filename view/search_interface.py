@@ -1,10 +1,12 @@
 # coding:utf-8
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QApplication, QTreeWidgetItem
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QApplication, QTreeWidgetItem, QShortcut
 from qfluentwidgets import (ScrollArea, SearchLineEdit, InfoBar, TreeWidget)
 
 from common.style_sheet import StyleSheet
 from common.util import parse_json_file, find_similar_terms
+from common.terms_dict import TERMS
 
 
 class SearchDictInterface(ScrollArea):
@@ -18,6 +20,10 @@ class SearchDictInterface(ScrollArea):
         self.lineEdit.searchSignal.connect(self.handle_search)
         self.lineEdit.setPlaceholderText('术语检索')
         self.lineEdit.returnPressed.connect(self.handle_search)
+
+        # 绑定快捷键
+        shortcut_edit = QShortcut(QKeySequence("Ctrl+/"), self)
+        shortcut_edit.activated.connect(self.lineEdit.setFocus)
 
         self.tree = TreeWidget(self.view)
         self.setStyleSheet('font-size: 10px;border-top: none;border-right: none')
@@ -42,7 +48,6 @@ class SearchDictInterface(ScrollArea):
         self.tree.itemClicked.connect(self.copy_text)
 
         self.view.setObjectName('view')
-        StyleSheet.GALLERY_INTERFACE.apply(self)
 
     def update_table(self, data):
         self.tree.clear()
@@ -55,9 +60,8 @@ class SearchDictInterface(ScrollArea):
         self.tree.expandAll()
 
     def handle_search(self):
-        term_dict = parse_json_file('./common/Dict-Mini.json')
         term = self.lineEdit.text()
-        result = find_similar_terms(term, term_dict)
+        result = find_similar_terms(term, TERMS)
         if result:
             self.update_table(result)
         else:
@@ -88,6 +92,8 @@ class SearchCacheInterface(ScrollArea):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
+        self.term_dict = TERMS
+
         self.setFixedWidth(300)
         self.view = QWidget(self)
         self.vBoxLayout = QVBoxLayout()
@@ -119,7 +125,6 @@ class SearchCacheInterface(ScrollArea):
         self.tree.itemClicked.connect(self.copy_text)
 
         self.view.setObjectName('view')
-        StyleSheet.GALLERY_INTERFACE.apply(self)
 
     def update_table(self, data):
         self.tree.clear()
@@ -132,9 +137,8 @@ class SearchCacheInterface(ScrollArea):
         self.tree.expandAll()
 
     def handle_search(self):
-        term_dict = parse_json_file('./common/Dict-Mini.json')
         term = self.lineEdit.text()
-        result = find_similar_terms(term, term_dict)
+        result = find_similar_terms(term, self.term_dict)
         if result:
             self.update_table(result)
         else:

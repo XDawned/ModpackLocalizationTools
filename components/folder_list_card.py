@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
@@ -8,12 +9,12 @@ from qfluentwidgets.components.settings.folder_list_setting_card import FolderIt
 
 
 class FolderListCard(ExpandSettingCard):
-    def __init__(self, title: str, content: str = None, directory="./", folders=None, parent=None):
+    # FIXME 修复下拉框展开不响应问题
+    def __init__(self, title: str, content: str = None, folders=None, parent=None):
         super().__init__(FIF.FOLDER, title, content, parent)
         if folders is None:
             folders = []
-        self._dialogDirectory = directory
-        self.folders = folders
+        self.folders = folders.copy()
         self.__initWidget()
 
     def __initWidget(self):
@@ -25,11 +26,13 @@ class FolderListCard(ExpandSettingCard):
             self.__addFolderItem(folder)
 
     def updateFolder(self, folders):
+        # FIXME 修复下拉框展开不响应问题
         self.__removeAllFolderWidget()
-        self.folders = folders
-        for folder in folders:
+        self.folders = folders.copy()
+        for folder in self.folders:
             self.__addFolderItem(folder)
         self._adjustViewSize()
+
 
     def __addFolderItem(self, folder: str):
         item = FolderItem(folder, self.view)
@@ -51,7 +54,7 @@ class FolderListCard(ExpandSettingCard):
         if item.folder not in self.folders:
             return
         self.folders.remove(item.folder)
-        self.viewLayout.deleteWidget(item)
+        self.viewLayout.removeWidget(item)
         self._adjustViewSize()
 
     def __removeAllFolderWidget(self):
@@ -60,5 +63,5 @@ class FolderListCard(ExpandSettingCard):
             item = self.viewLayout.takeAt(0)
             widget = item.widget()
             if widget is not None:
-                self.viewLayout.deleteWidget(widget)
+                self.viewLayout.removeWidget(widget)
         self._adjustViewSize()

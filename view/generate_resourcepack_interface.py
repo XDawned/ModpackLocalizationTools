@@ -8,7 +8,7 @@ import zipfile
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QLabel, QFileDialog
-from qfluentwidgets import FluentIcon as FIF
+from qfluentwidgets import FluentIcon as FIF, ProgressBar
 from qfluentwidgets import InfoBar
 from qfluentwidgets import (SettingCardGroup, PushSettingCard, ScrollArea, ExpandLayout, PrimaryPushSettingCard,
                             MessageBox, StateToolTip, ComboBoxSettingCard, setTheme, )
@@ -27,7 +27,9 @@ class GenerateResourcepackInterface(ScrollArea):
         self.processThread = None
         self.packFolder = cfg.get(cfg.workFolder)
         self.expandLayout = ExpandLayout(self.scrollWidget)
-
+        # progress bar
+        self.progressBar = ProgressBar()
+        self.progressBar.setValue(0)
         # setting label
         self.packLabel = QLabel(self.tr("生成汉化资源包"), self)
 
@@ -106,6 +108,7 @@ class GenerateResourcepackInterface(ScrollArea):
         self.packLabel.move(36, 30)
         self.expandLayout.setSpacing(28)
         self.expandLayout.setContentsMargins(36, 10, 36, 0)
+        self.expandLayout.addWidget(self.progressBar)
         self.metaGroup.addSettingCard(self.metaNameCard)
         self.metaGroup.addSettingCard(self.metaVersionCard)
         self.metaGroup.addSettingCard(self.metaDescCard)
@@ -138,6 +141,7 @@ class GenerateResourcepackInterface(ScrollArea):
         self.packFolder = folder
 
     def generate_resourcepack(self):
+
         title = self.tr('注意')
         content = self.tr(
             "此操作会将工作目录下所有zh_cn文件打包。另外后续使用时，任务部分除资源包外还需将原任务替换为local目录下使用本地化键的任务！！！")
@@ -148,12 +152,16 @@ class GenerateResourcepackInterface(ScrollArea):
             self.tr('提取中'), self.tr('请耐心等待'), self.window())
         self.stateTooltip.move(self.stateTooltip.getSuitablePos())
         self.stateTooltip.show()
-        self.processThread = ProcessThread(self.packFolder)
+        self.progressBar.show()
+        self.processThread = GenerateResourcePackThread(self.packFolder)
+        self.processThread.progress.connect(self.progressBar.setValue)
         self.processThread.finished.connect(self.on_process_finished)
         self.processThread.error.connect(self.on_process_failed)
         self.processThread.start()
 
     def on_process_finished(self):
+        # 隐藏进度条，恢复用户界面
+        self.progressBar.hide()
         self.stateTooltip.setContent(
             self.tr('完成,文件已生成于工作同级目录下'))
         self.stateTooltip.setState(True)
@@ -161,7 +169,7 @@ class GenerateResourcepackInterface(ScrollArea):
 
     def on_process_failed(self, error_msg):
         # 隐藏进度条，恢复用户界面
-        # self.progressBar.hide()
+        self.progressBar.hide()
         # 弹出错误提示框
         InfoBar.error(
             self.tr('生成失败'),
@@ -169,11 +177,11 @@ class GenerateResourcepackInterface(ScrollArea):
             duration=10000,
             parent=self
         )
-        print(error_msg)
 
 
-class ProcessThread(QThread):
+class GenerateResourcePackThread(QThread):
     finished = pyqtSignal()
+    progress = pyqtSignal(int)
     error = pyqtSignal(str)
     packmeta = {
         "pack": {
@@ -190,17 +198,28 @@ class ProcessThread(QThread):
 
     def run(self):
         try:
+            total = 0
+            current = 0
+            for root, dirs, files in os.walk(self.work_folder):
+                total += len(files)
             for root, dirs, files in os.walk(self.work_folder):
                 for file in files:
+                    current += 1
                     if "zh_cn" in file.lower() and '/old/' not in root:
                         if 'resourcepack' in root:
                             break
                         source_file = os.path.join(root, file)
                         relative_path = os.path.relpath(source_file, self.work_folder)
-                        destination_file = os.path.join(self.work_folder, 'resourcepacks', 'assets',
-                                                        relative_path)
+                        # 检查相对路径是否正确
+                        des_relative_path = relative_path.split('\\')
+                        if len(des_relative_path) > 3:
+                            des_relative_path = '\\'.join(des_relative_path[-3:])
+                        else:
+                            des_relative_path = relative_path
+                        destination_file = os.path.join(self.work_folder, 'resourcepacks', 'assets', des_relative_path)
                         os.makedirs(os.path.dirname(destination_file), exist_ok=True)
                         shutil.copy(source_file, destination_file)
+                    self.progress.emit(current)
             # 将pack.mcmeta写入资源包
             packmeta_path = os.path.join(self.work_folder, 'resourcepacks')
             os.makedirs(packmeta_path, exist_ok=True)

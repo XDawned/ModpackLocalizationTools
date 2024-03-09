@@ -8,8 +8,8 @@
     <a href="https://github.com/Tryanks/python-snbtlib">
         <img src="https://img.shields.io/badge/lib-snbtlib-brightgreen" alt="lib">
     </a>
-    <a href="https://github.com/XDawned/ModpackLocalizationTools/releases/tag/v1.0.0">
-        <img src="https://img.shields.io/badge/releases-1.0-blue" alt="releases">
+    <a href="https://github.com/XDawned/ModpackLocalizationTools/releases/latest">
+        <img src="https://img.shields.io/badge/releases-v1.0.0" alt="releases">
     </a>
 
 # 整合包本地化工具
@@ -35,8 +35,7 @@
 2. 保存进度功能用于将你已经润色完的汉化放入记忆库中供后续使用, 你可以在cache中找到相应记录
 3. 文件浏览页面右键可以进行lang与json互相转化
 4. 如果不需要为FTBQ提lang，你可以直接在文件浏览器中打开snbt文件对其进行直接编辑
-5. 本项目开源免费，激活与否只影响机翻之后是否保留原文,比如`apple`翻译后为`苹果[--apple--]`，主要为标记机翻以防止大范围传播
-6. 激活码申请渠道，你可以加入我们的QQ群`565620304`进行免费申请，发放对象为有资历的汉化组或制作过相应汉化的个人，后续我们会为过审译者们提供更多的便利功能。
+5. 维护翻译生态,请不要直接发布未经人工润色的机翻
 ### 效果：
 ![29BL(U}7()AT$V7HFOP(BGL](https://github.com/XDawned/ModpackLocalizationTools/assets/96915192/c43ec8fe-b0da-466f-be98-60299b03a76e)
 

@@ -1,17 +1,19 @@
 # coding: utf-8
+import threading
 from pathlib import Path
 
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QKeySequence
 from PyQt5.QtWidgets import QVBoxLayout, QWidget, QTableWidgetItem, QHBoxLayout, QFrame, QLabel, \
-    QSpacerItem, QSizePolicy
+    QSpacerItem, QSizePolicy, QShortcut, QApplication
 from qfluentwidgets import TableWidget, TextEdit, PushButton, SearchLineEdit, LineEdit, ScrollArea, ExpandLayout, \
-    FluentIcon
+    FluentIcon, InfoBar
 
 from common.config import cfg
 from common.style_sheet import StyleSheet
-from common.util import merge_dicts, parse_json_file
+from common.util import merge_dicts, parse_json_file, ACA, global_aca
 from components.link_card import SuggestCardWidget
+from components.mc_color_edit import McColorEdit
 
 
 class Frame(QFrame):
@@ -49,12 +51,12 @@ class BrowseLangWidget(Frame):
         # self.table.setColumnCount(3)
         self.table.setColumnCount(2)
         self.table.setRowCount(len(self.data))
-        self.table.setColumnWidth(0, 100)
+        self.table.setColumnWidth(0, 300)
         # self.table.setColumnWidth(1, 300)
         self.update_table(self.data)
         # self.table.cellChanged.connect(self.handleCellChanged)
         self.table.setRowCount(8)
-        self.setFixedHeight(400)
+        self.setFixedHeight(720)
         self.table.horizontalHeader().setStretchLastSection(True)
 
     def handle_work_search(self):
@@ -66,9 +68,6 @@ class BrowseLangWidget(Frame):
                     item.setFont(QFont("Segoe UI", 12, QFont.Bold))
                 else:
                     item.setFont(QFont("SimSun", 10))
-                    # font = item.font()
-                    # print(font.family())
-                    # print(font.pointSize())
 
     def handle_item_clicked(self, item):
         self.doubleClicked.emit(item.row())
@@ -119,6 +118,7 @@ class ReviewLangWidget(ScrollArea):
         self.current_index = 0
         self.str_count_all = 0
         self.translator_thread = None
+        self.aca = global_aca
 
         self.init_ui()
 
@@ -131,12 +131,19 @@ class ReviewLangWidget(ScrollArea):
         self.setWidget(self.scrollWidget)
         self.setWidgetResizable(True)
 
-        self.text_edit_ori = TextEdit(self.scrollWidget)
+        self.text_edit_ori = McColorEdit(self.scrollWidget)
         self.text_edit_ori.setReadOnly(True)
-        self.text_edit_trans = TextEdit(self.scrollWidget)
-        self.text_edit_trans.textChanged.connect(self.handleTextChanged)
+        self.text_edit_trans = McColorEdit(self.scrollWidget)
+
         self.text_edit_ori.setFixedHeight(100)
         self.text_edit_trans.setFixedHeight(100)
+
+        shortcut_edit = QShortcut(QKeySequence("Ctrl+Return"), self)
+        shortcut_cancel = QShortcut(QKeySequence("Esc"), self)
+        self.text_edit_trans.textChanged.connect(self.handleTextChanged)
+        shortcut_edit.activated.connect(self.text_edit_trans.setFocus)
+        shortcut_cancel.activated.connect(self.text_edit_trans.clearFocus)
+
         self.label_key = QLabel('键值', self.scrollWidget)
         label2 = QLabel('原文', self.scrollWidget)
         label3 = QLabel('译文', self.scrollWidget)
@@ -150,11 +157,16 @@ class ReviewLangWidget(ScrollArea):
         button_layout = QHBoxLayout()
         button_layout.setSpacing(0)
         prev_button = PushButton('<', button_box)
+        shortcut_prev_button = QShortcut(QKeySequence("Ctrl+A"), self)
+        self.text_edit_trans.textChanged.connect(self.handleTextChanged)
         prev_button.setFixedHeight(40)
         prev_button.clicked.connect(self.prev_data)
+        shortcut_prev_button.activated.connect(self.prev_data)
         next_button = PushButton('>', button_box)
+        shortcut_next_button = QShortcut(QKeySequence("Ctrl+D"), self)
         next_button.setFixedHeight(40)
         next_button.clicked.connect(self.next_data)
+        shortcut_next_button.activated.connect(self.prev_data)
         button_layout.addWidget(prev_button)
         self.jump_index_edit = LineEdit(button_box)
         self.jump_index_edit.setFixedSize(65, 40)
@@ -181,7 +193,7 @@ class ReviewLangWidget(ScrollArea):
         self.suggestPanel = SuggestCardWidget(self.scrollWidget)
         # self.suggestPanel.addCard(author='离线翻译', trans='苹果', ori='apple', icon=FluentIcon.GLOBE)
         # self.suggestPanel.addCard(author='百度翻译', trans='苹果', ori='apple', icon=FluentIcon.GLOBE)
-        self.suggestPanel.clickSignal.connect(self.text_edit_trans.setHtml)
+        self.suggestPanel.clickSignal.connect(self.copy_text)
 
         self.expandLayout.setSpacing(28)
         self.expandLayout.setContentsMargins(36, 10, 36, 0)
@@ -195,6 +207,17 @@ class ReviewLangWidget(ScrollArea):
 
         # self.setLayout(layout)
         self.update_data()
+
+    def copy_text(self, text):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        InfoBar.success(
+            self.tr('已复制到剪切板'),
+            self.tr(''),
+            duration=1500,
+            parent=self
+        )
+
 
     def update_table(self, data):
         self.data_array = data
@@ -214,7 +237,9 @@ class ReviewLangWidget(ScrollArea):
                 if len(data) >= 3:
                     self.label_key.setText('' + data[0])
                     self.text_edit_ori.setHtml(data[1])
+                    self.text_edit_ori.fresh_color()
                     self.text_edit_trans.setHtml(data[2])
+                    self.text_edit_trans.fresh_color()
                     self.current_edit_info.setText(
                         '此节字符：%d     总字符：%d' % (len(self.data_array[self.current_index][1]), self.str_count_all))
                     self.dataUpdated.emit(self.data_array[self.current_index][1])
@@ -250,27 +275,34 @@ class ReviewLangWidget(ScrollArea):
 
     def update_suggest_card(self):  # 更新翻译建议
         self.suggestPanel.removeAllCard()
-        # 记忆库
-        for key, value in self.all_cache_dic.items():
+        if self.data_array:
+            # 记忆库
             ori = self.data_array[self.current_index][1]
-            if ori == self.all_cache_dic[key]['ori']:
-                trans = self.all_cache_dic[key]['trans']
-                self.suggestPanel.addCard(author='记忆库检索', trans=trans, ori=ori, icon=FluentIcon.PIN)
-        # 机翻
-        current_trans = self.data_array[self.current_index][3]
-        if current_trans:
-            ori = self.data_array[self.current_index][1]
-            trans = current_trans
-            api = cfg.get(cfg.translateApi)
-            if api == '0':
-                api = '百度翻译'
-            elif api == '1':
-                api = '离线翻译'
-            else:
-                api = 'ChatGPT'
-            self.suggestPanel.addCard(author=api, trans=trans, ori=ori, icon=FluentIcon.GLOBE)
+            for key, value in self.all_cache_dic.items():
+                if ori == self.all_cache_dic[key]['ori']:
+                    trans = self.all_cache_dic[key]['trans']
+                    self.suggestPanel.addCard(author='进度缓存', trans=trans, ori=ori, icon=FluentIcon.PIN)
+            # 机翻
+            current_trans = self.data_array[self.current_index][3]
+            if current_trans:
+                trans = current_trans
+                api = cfg.get(cfg.translateApi)
+                if api == '0':
+                    api = '百度翻译'
+                elif api == '1':
+                    api = '离线翻译'
+                else:
+                    api = 'ChatGPT'
+                self.suggestPanel.addCard(author=api, trans=trans, ori=ori, icon=FluentIcon.GLOBE)
+            # 术语词典
+            term_search = self.aca.find(ori)
+            if term_search:
+                for term in term_search:
+                    self.suggestPanel.addCard(author='术语库', trans='|'.join(term[1][1]), ori=term[1][0], icon=FluentIcon.HELP)
 
     def get_all_cache_dic(self):
-        for path in Path(cfg.get(cfg.cacheFolder)).rglob("*.json"):
+        self.all_cache_dic = {}
+        cache_path = f"{cfg.get(cfg.workFolder)}/.mplt/cache"
+        for path in Path(cache_path).rglob("*.json"):
             cache_dic = parse_json_file(str(path))
             self.all_cache_dic = merge_dicts(self.all_cache_dic, cache_dic)
