@@ -223,7 +223,7 @@ class ReviewLangWidget(ScrollArea):
         self.data_array = data
         self.current_index = 0
         self.str_count_all = 0
-        # self.get_all_cache_dic()
+        self.get_all_cache_dic()
         for i in data:
             self.str_count_all += len(i[1])
         self.update_data()
@@ -281,7 +281,7 @@ class ReviewLangWidget(ScrollArea):
             for key, value in self.all_cache_dic.items():
                 if ori == self.all_cache_dic[key]['ori']:
                     trans = self.all_cache_dic[key]['trans']
-                    self.suggestPanel.addCard(author='记忆库检索', trans=trans, ori=ori, icon=FluentIcon.PIN)
+                    self.suggestPanel.addCard(author='进度缓存', trans=trans, ori=ori, icon=FluentIcon.PIN)
             # 机翻
             current_trans = self.data_array[self.current_index][3]
             if current_trans:

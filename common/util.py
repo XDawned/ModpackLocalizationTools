@@ -174,16 +174,13 @@ class Lang:
         有则加载，无则创建
         两个参数用于非Lang文件保存缓存时使用
         """
-        if file_path:
-            self.cache_name = encode_to_MD5(file_path) + '.json'
-        else:
-            if not self.file_path:
-                raise Exception("缓存文件MD5路径生成错误,缺少文件地址")
-            self.cache_name = encode_to_MD5(self.file_path) + '.json'
+        if not self.file_path:
+            raise Exception("缓存文件MD5路径生成错误,缺少文件地址")
+        self.cache_name = encode_to_MD5(self.file_path) + '.json'
         self.cache_file_path = self.cache_folder + '/' + self.cache_name
         if not os.path.exists(self.cache_folder):
             os.mkdir(self.cache_folder)
-        if check_file_exists(self.cache_folder, self.cache_name) is not None:
+        if os.path.exists(self.cache_file_path):
             self.cache_dic = parse_json_file(self.cache_file_path)
         else:
             save_lang_file({}, self.cache_file_path)
