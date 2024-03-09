@@ -360,7 +360,6 @@ class SettingInterface(ScrollArea):
             lambda: QDesktopServices.openUrl(QUrl(FEEDBACK_URL)))
 
     def handle_api_change(self, option):
-        print(option)
         if option.value == '0':
             self.secretKeyCard.setVisible(False)
             self.orgIdCard.setVisible(False)
