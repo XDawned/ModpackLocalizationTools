@@ -193,7 +193,7 @@ class WorkInterface(ScrollArea):
             InfoBar.error(
                 self.tr('错误'),
                 self.tr(str(e)),
-                duration=10000,
+                duration=30000,
                 parent=self
             )
         else:

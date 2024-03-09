@@ -10,6 +10,7 @@ from collections import OrderedDict
 from functools import wraps
 from pathlib import Path
 
+import func_timeout.exceptions
 from openai import OpenAI
 import ahocorasick
 import requests
@@ -17,6 +18,7 @@ import snbtlib
 from PyQt5.QtCore import QThread, pyqtSignal, QObject
 from nbt import nbt
 from nbt.nbt import TAG
+from func_timeout import func_set_timeout
 
 from transformers import MarianTokenizer, MarianMTModel
 
@@ -529,6 +531,7 @@ class Translator(QObject):
         return completion.choices[0].message.content
 
     @func_timer
+    @func_set_timeout(20)
     def translate(self, text_: str):
         if self.api == '0':
             return self.baidu_translate(text_)
@@ -641,6 +644,8 @@ class LangTranslateThread(QThread):
                     self.trans(lang)
             else:
                 self.trans(self.lang)
+        except func_timeout.exceptions.FunctionTimedOut:
+            self.error.emit("  请求超时，请检查你的接口配置是否正确")
         except Exception as e:
             raise e
             self.error.emit(str(e))
