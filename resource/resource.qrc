@@ -21,10 +21,5 @@
         <file>qss/light/navigation_view_interface.qss</file>
         <file>qss/light/test.qss</file>
 
-
-
-
-
-
     </qresource>
 </RCC>

@@ -1,13 +1,11 @@
 # coding:utf-8
 import os
-from pathlib import Path
 
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices, QKeySequence
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QShortcut, QLabel
 from qfluentwidgets import ScrollArea, InfoBar, RoundMenu, Action, FluentIcon, StateToolTip, \
     ProgressBar, TextEdit, MessageBox, CommandBar, TransparentDropDownPushButton, setFont
-from qfluentwidgets import FluentIcon as FIF
 
 from common.config import cfg
 from common.style_sheet import StyleSheet
@@ -80,7 +78,7 @@ class WorkInterface(ScrollArea):
         self.searchBox = QWidget()
         self.searchLayout = QVBoxLayout()
         self.searchBox.setFixedWidth(300)
-        self.remain_time_label = QLabel()
+        self.remain_time_label = QLabel('', self)
         self.remain_time_label.setFixedHeight(40)
         self.transLog = TextEdit()
         self.transLog.setStyleSheet('background-color: transparent;border:none')
@@ -92,7 +90,6 @@ class WorkInterface(ScrollArea):
         self.searchDictInterface.setFixedHeight(400)
         self.searchLayout.addWidget(self.searchDictInterface)
         self.searchLayout.addStretch(1)
-        self.remain_time_label.setText('')
         self.searchLayout.addWidget(self.remain_time_label)
         self.searchLayout.addWidget(self.transLog)
         self.searchBox.setLayout(self.searchLayout)
@@ -106,6 +103,7 @@ class WorkInterface(ScrollArea):
 
         self.fileBrowser.setObjectName('fileBrowser')
         self.transLog.setObjectName('transLog')
+        self.remain_time_label.setObjectName('remain_time_label')
         StyleSheet.WORK_INTERFACE.apply(self)
 
     def create_command_bar(self):

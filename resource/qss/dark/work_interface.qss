@@ -15,3 +15,8 @@ ScrollArea {
     margin-top: 15px;
     background-color: transparent;
 }
+#remain_time_label{
+    color: white;
+    font-size: 15px;
+}
+
