@@ -22,7 +22,7 @@ class Config(QConfig):
     lowVersionLangFormat = ConfigItem("LangFormat", "LowVersionLangFormat", False, BoolValidator())
     # 翻译API
     translateApi = OptionsConfigItem(
-        "TranslateApi", "TranslateApi", "翻译API", OptionsValidator(["0", "1", "2"]))
+        "TranslateApi", "TranslateApi", "1", OptionsValidator(["0", "1", "2"]))
     appKey = ConfigItem("TranslateApi", "AppKey", 'Your APP_KEY')
     appSecret = ConfigItem("TranslateApi", "AppSecret", 'Your APP_SECRET')
     # openapi
