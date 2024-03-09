@@ -5,7 +5,7 @@ from pathlib import Path
 import snbtlib
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QLabel, QFileDialog
-from qfluentwidgets import FluentIcon as FIF
+from qfluentwidgets import FluentIcon as FIF, ProgressBar
 from qfluentwidgets import InfoBar
 from qfluentwidgets import (SettingCardGroup, PushSettingCard, ScrollArea, ExpandLayout,
                             PrimaryPushSettingCard, MessageBox, StateToolTip, SwitchSettingCard, setTheme, )
@@ -30,6 +30,8 @@ class ModpackExtractInterface(ScrollArea):
         self.processThread = None
         self.expandLayout = ExpandLayout(self.scrollWidget)
 
+        self.progressBar = ProgressBar()
+        self.progressBar.setValue(0)
         # setting label
         self.packLabel = QLabel(self.tr("整合包待翻部分提取"), self)
 
@@ -47,20 +49,17 @@ class ModpackExtractInterface(ScrollArea):
             self.tr('Mods(可匹配已有汉化资源包)'),
             self.tr(
                 "检测到以下未汉化的模组文件，如果存在i18n模组请将其生成的汉化资源包放到resourcepack目录下,默认i18n资源包位于C:/Users/用户名/.i18nupdatemod下"),
-            directory='./',
             parent=self.extractFileGroup
         )
         self.ftbqFolderCard = FolderListCard(
             self.tr('FTBQuests'),
             self.tr(
                 "检测到以下FTBQuests任务文件,使用前请确保任务没有使用键值，如果已使用键值可以将lang手动导入工作目录中"),
-            directory='./',
             parent=self.extractFileGroup
         )
         self.bqFolderCard = FolderListCard(
             self.tr('BetterQuesting'),
             self.tr("检测到以下BetterQuesting任务文件"),
-            directory='./',
             parent=self.extractFileGroup
         )
         self.configGroup = SettingCardGroup(
@@ -108,6 +107,7 @@ class ModpackExtractInterface(ScrollArea):
         self.extractFileGroup.addSettingCard(self.bqFolderCard)
         self.configGroup.addSettingCard(self.lowVersionLangFormatCard)
         self.funcGroup.addSettingCard(self.buttonBoxCard)
+        self.expandLayout.addWidget(self.progressBar)
         self.expandLayout.addWidget(self.packFolderCard)
         self.expandLayout.addWidget(self.extractFileGroup)
         self.expandLayout.addWidget(self.configGroup)
@@ -144,17 +144,17 @@ class ModpackExtractInterface(ScrollArea):
         self.stateTooltip.show()
         self.checkThread = CheckThread(self.packFolder)
         self.checkThread.finished.connect(self.on_finished)
-        self.checkThread.finished.connect(self.update_card)
+        self.checkThread.info.connect(self.show_info)
         self.checkThread.error.connect(self.on_failed)
         self.checkThread.start()
 
-    def update_card(self, check):
+    def update_card(self):
         self.un_trans_mod_list = self.checkThread.un_trans_mod_list
         self.ftbq_list = self.checkThread.ftbq_list
         self.bq_list = self.checkThread.bq_list
-        self.modFolderCard.update_folder(mod.path for mod in self.un_trans_mod_list)
-        self.ftbqFolderCard.update_folder(self.ftbq_list)
-        self.bqFolderCard.update_folder(self.bq_list)
+        self.modFolderCard.updateFolder([mod.path for mod in self.un_trans_mod_list])
+        self.ftbqFolderCard.updateFolder(self.ftbq_list)
+        self.bqFolderCard.updateFolder(self.bq_list)
 
     def generate_lang(self):
         title = self.tr('注意混淆')
@@ -167,7 +167,9 @@ class ModpackExtractInterface(ScrollArea):
             self.tr('提取中'), self.tr('请耐心等待'), self.window())
         self.stateTooltip.move(self.stateTooltip.getSuitablePos())
         self.stateTooltip.show()
+        self.progressBar.show()
         self.processThread = ProcessThread(self.un_trans_mod_list, self.ftbq_list, self.bq_list)
+        self.processThread.progress.connect(self.progressBar.setValue)
         self.processThread.finished.connect(self.on_finished)
         # self.processThread.progress.connect(self.progressBar.setValue)
         self.processThread.error.connect(self.on_failed)
@@ -179,6 +181,12 @@ class ModpackExtractInterface(ScrollArea):
             text)
         self.stateTooltip.setState(True)
         self.stateTooltip = None
+        self.update_card()
+        self.progressBar.hide()
+
+    def show_info(self, text: str):
+        if self.stateTooltip:
+            self.stateTooltip.setContent(text)
 
     def on_failed(self, error_msg):
         InfoBar.error(
@@ -187,10 +195,12 @@ class ModpackExtractInterface(ScrollArea):
             duration=10000,
             parent=self
         )
+        self.progressBar.hide()
 
 
 class CheckThread(QThread):
     finished = pyqtSignal(str)
+    info = pyqtSignal(str)
     error = pyqtSignal(str)
     un_trans_mod_list = []
     ftbq_list = []
@@ -208,30 +218,39 @@ class CheckThread(QThread):
             bq_folder_path = get_if_subfolder_exists(self.packFolder, 'config/betterquesting')
             i18n_trans_mod_list = []
             if resource_pack_folder_path:
+                self.info.emit("检测到i18n资源包，正在读取中...")
                 resource_pack_paths = (str(path) for path in Path(resource_pack_folder_path).rglob("*.zip"))
                 for resource_pack_path in resource_pack_paths:
                     resource_pack = ResourcePack(resource_pack_path)
                     i18n_trans_mod_list.extend(resource_pack.mods)
+                self.info.emit("i18n资源包读取完毕")
             if mods_folder_path:
                 mod_paths = [str(path) for path in Path(mods_folder_path).rglob("*.jar")]
-                for mod_path in mod_paths:
-                    mod = Mod(mod_path)
-                    if mod.modName not in i18n_trans_mod_list and len(mod.langList) > 0:  # 排除i18n汉化及无本地化模组
-                        # 检查官译
-                        flag = False
-                        for lang in mod.langList:  # 防止语言文件名称大小写及类型不统一
-                            if 'zh_cn' in lang.lower():
-                                flag = True
-                                break
-                        if not flag:
-                            lang_text = mod.get_lang_text(mod.langList[0])
-                            if len(lang_text) > 5:  # 忽略空或过小语言文件
-                                self.un_trans_mod_list.append(mod)
-
+                if mod_paths:
+                    self.info.emit("检测到模组，正在处理中...")
+                    for mod_path in mod_paths:
+                        mod = Mod(mod_path)
+                        self.info.emit(f"模组：{mod.modName}")
+                        if mod.modName not in i18n_trans_mod_list and len(mod.langList) > 0:  # 排除i18n汉化及无本地化模组
+                            # 检查官译
+                            flag = False
+                            for lang in mod.langList:  # 防止语言文件名称大小写及类型不统一
+                                if 'zh_cn' in lang.lower():
+                                    flag = True
+                                    break
+                            if not flag:
+                                lang_text = mod.get_lang_text(mod.langList[0])
+                                if len(lang_text) > 5:  # 忽略空或过小语言文件
+                                    self.un_trans_mod_list.append(mod)
+                    self.info.emit("模组处理完成")
             if ftbq_folder_path:
+                self.info.emit("检测到FTB任务，正在处理中...")
                 self.ftbq_list = [str(path) for path in Path(ftbq_folder_path).rglob("*.snbt")]
+                self.info.emit("FTB任务处理完成")
             if bq_folder_path:
+                self.info.emit("检测到BetterQuesting任务，正在处理中...")
                 self.bq_list = [check_file_exists(bq_folder_path, "DefaultQuests.json")]
+                self.info.emit("BetterQuesting任务处理完成")
         except Exception as e:
             self.error.emit(str(e))
         else:
@@ -240,6 +259,7 @@ class CheckThread(QThread):
 
 class ProcessThread(QThread):
     finished = pyqtSignal(str)
+    progress = pyqtSignal(int)
     error = pyqtSignal(str)
 
     def __init__(self, un_trans_mod_list, ftbq_list, bq_list):
@@ -251,7 +271,10 @@ class ProcessThread(QThread):
 
     def run(self):
         try:
+            current = 0
+            total = len(self.un_trans_mod_list) + len(self.ftbq_list) + len(self.bq_list)
             for mod in self.un_trans_mod_list:
+                current += 1
                 if mod.langList:
                     lang_path = self.work_folder + '/mods/' + mod.modName + '/lang/' + mod.langList[0]
                     lang_name = mod.langList[0]
@@ -261,10 +284,12 @@ class ProcessThread(QThread):
                             lang_name = lang
                             break
                     save_file(mod.get_lang_text(lang_name), lang_path)
+                self.progress.emit(int(current / total * 100))
 
             ftbq_lang = {}
             if len(self.ftbq_list) > 0:
                 for ftbq in self.ftbq_list:
+                    current += 1
                     quest = FTBQuest(ftbq)
                     if quest.quest_name in ['data', 'chapter_groups']:
                         quest_local_path = self.work_folder + '/ftbquests/local/' + \
@@ -274,16 +299,21 @@ class ProcessThread(QThread):
                                            quest.quest_name + '.snbt' if quest.quest_type < 2 else '.nbt'
                     save_file(snbtlib.dumps(quest.quest_local), quest_local_path)
                     ftbq_lang.update(quest.lang.lang_dic)
+                    self.progress.emit(int(current / total * 100))
                 quest_lang_path = self.work_folder + '/ftbquests/lang/en_us.json'
                 save_file(json.dumps(ftbq_lang, indent=2, ensure_ascii=False), quest_lang_path)
+
+
 
             bq_lang = {}
             if len(self.bq_list) > 0:
                 for bq in self.bq_list:
+                    current += 1
                     quest = BetterQuest(bq)
                     quest_local_path = self.work_folder + '/betterquesting/local/DefaultQuests.json'
                     save_file(quest.dumps(quest.quest_local), quest_local_path)
                     bq_lang.update(quest.lang.lang_dic)
+                    self.progress.emit(int(current / total * 100))
                 quest_lang_path = self.work_folder + '/betterquesting/lang/en_us.json'
                 save_file(json.dumps(bq_lang, indent=2, ensure_ascii=False), quest_lang_path)
         except Exception as e:
