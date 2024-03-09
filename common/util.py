@@ -18,7 +18,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, QObject
 from nbt import nbt
 from nbt.nbt import TAG
 
-# from transformers import MarianTokenizer, MarianMTModel
+from transformers import MarianTokenizer, MarianMTModel
 
 from common.config import cfg
 from common.terms_dict import TERMS
@@ -481,22 +481,19 @@ class Translator(QObject):
         return self.post_process(text_, translated_text)
 
     def init_local_model(self):
-        pass
-        # self.model = MarianMTModel.from_pretrained("./models/minecraft-en-zh")
-        # self.tokenizer = MarianTokenizer.from_pretrained("./models/minecraft-en-zh")
+        self.model = MarianMTModel.from_pretrained("./models/minecraft-en-zh")
+        self.tokenizer = MarianTokenizer.from_pretrained("./models/minecraft-en-zh")
 
     def local_translate(self, text_: str):
-        time.sleep(0.2)
-        return 'Alpha版本，仅供测试使用！'
-        # if not all([self.model, self.tokenizer]):
-        #     self.init_local_model()
-        # text_process = self.pre_process(text_)
-        # if text_process is None:
-        #     return text_
-        # input_ids = self.tokenizer.encode(text_process, return_tensors="pt")
-        # translated = self.model.generate(input_ids, max_length=128)
-        # output = self.tokenizer.decode(translated[0], skip_special_tokens=True)
-        # return self.post_process(text_, output)
+        if not all([self.model, self.tokenizer]):
+            self.init_local_model()
+        text_process = self.pre_process(text_)
+        if text_process is None:
+            return text_
+        input_ids = self.tokenizer.encode(text_process, return_tensors="pt")
+        translated = self.model.generate(input_ids, max_length=128)
+        output = self.tokenizer.decode(translated[0], skip_special_tokens=True)
+        return self.post_process(text_, output)
 
     def init_openai_model(self):
         self.client = OpenAI(
@@ -513,7 +510,7 @@ class Translator(QObject):
         prompt_dict = {
             "tasks": f"Translate the text below about minecraft into Chinese\n"
                      f"You can choose whether to refer to the following terms based on the context yourself:\n"
-                     f"Do not return any other conten besides the translated text\n",
+                     f"Do not return any other content besides the translated text\n",
             "terms": ref_prefix,
             "text": text
         }

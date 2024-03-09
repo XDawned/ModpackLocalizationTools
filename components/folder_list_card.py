@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
@@ -8,12 +9,12 @@ from qfluentwidgets.components.settings.folder_list_setting_card import FolderIt
 
 
 class FolderListCard(ExpandSettingCard):
-    def __init__(self, title: str, content: str = None, directory="./", folders=None, parent=None):
+    # FIXME 修复下拉框展开不响应问题
+    def __init__(self, title: str, content: str = None, folders=None, parent=None):
         super().__init__(FIF.FOLDER, title, content, parent)
         if folders is None:
             folders = []
-        self._dialogDirectory = directory
-        self.folders = folders
+        self.folders = folders.copy()
         self.__initWidget()
 
     def __initWidget(self):
@@ -22,38 +23,41 @@ class FolderListCard(ExpandSettingCard):
         self.viewLayout.setAlignment(Qt.AlignTop)
         self.viewLayout.setContentsMargins(0, 0, 0, 0)
         for folder in self.folders:
-            self.__add_folder_item(folder)
+            self.__addFolderItem(folder)
 
-    def update_folder(self, folders):
-        self.__remove_all_folder_widget()
-        self.folders = folders
-        for folder in folders:
-            self.__add_folder_item(folder)
+    def updateFolder(self, folders):
+        # FIXME 修复下拉框展开不响应问题
+        self.__removeAllFolderWidget()
+        self.folders = folders.copy()
+        for folder in self.folders:
+            self.__addFolderItem(folder)
         self._adjustViewSize()
 
-    def __add_folder_item(self, folder: str):
+
+    def __addFolderItem(self, folder: str):
         item = FolderItem(folder, self.view)
-        item.removed.connect(self.__show_confirm_dialog)
+        item.removed.connect(self.__showConfirmDialog)
         self.viewLayout.addWidget(item)
         self._adjustViewSize()
 
-    def __show_confirm_dialog(self, item: FolderItem):
+    def __showConfirmDialog(self, item: FolderItem):
+        """ show confirm dialog """
         name = Path(item.folder).name
         title = self.tr('确认删除此文件？')
         content = self.tr("提取本地键将不考虑 ") + f'"{name}"' + \
                   self.tr(",此操作不删除本地文件")
         w = Dialog(title, content, self.window())
-        w.yesSignal.connect(lambda: self.__remove_folder(item))
+        w.yesSignal.connect(lambda: self.__removeFolder(item))
         w.exec_()
 
-    def __remove_folder(self, item: FolderItem):
+    def __removeFolder(self, item: FolderItem):
         if item.folder not in self.folders:
             return
         self.folders.remove(item.folder)
         self.viewLayout.removeWidget(item)
         self._adjustViewSize()
 
-    def __remove_all_folder_widget(self):
+    def __removeAllFolderWidget(self):
         self.folders = []
         while self.viewLayout.count():
             item = self.viewLayout.takeAt(0)
