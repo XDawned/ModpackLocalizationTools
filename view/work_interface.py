@@ -220,6 +220,7 @@ class WorkInterface(ScrollArea):
         # 批量预翻译并生成缓存文件
         failed_file = []
         lang = []
+        self.transLog.setPlainText('')
         for root, dirs, files in os.walk(path):
             for file in files:
                 if "zh_cn" not in file.lower():
