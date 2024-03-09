@@ -9,7 +9,7 @@
         <img src="https://img.shields.io/badge/lib-snbtlib-brightgreen" alt="lib">
     </a>
     <a href="https://github.com/XDawned/ModpackLocalizationTools/releases/latest">
-        <img src="https://img.shields.io/badge/releases-v1.0.0" alt="releases">
+        <img src="https://img.shields.io/badge/releases-1.1.0-blue" alt="releases">
     </a>
 
 # 整合包本地化工具
