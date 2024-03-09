@@ -647,7 +647,6 @@ class LangTranslateThread(QThread):
         except func_timeout.exceptions.FunctionTimedOut:
             self.error.emit("  请求超时，请检查你的接口配置是否正确")
         except Exception as e:
-            raise e
             self.error.emit(str(e))
         else:
             self.finished.emit()
