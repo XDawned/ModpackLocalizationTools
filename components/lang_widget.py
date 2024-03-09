@@ -56,7 +56,7 @@ class BrowseLangWidget(Frame):
         self.update_table(self.data)
         # self.table.cellChanged.connect(self.handleCellChanged)
         self.table.setRowCount(8)
-        self.setFixedHeight(400)
+        self.setFixedHeight(720)
         self.table.horizontalHeader().setStretchLastSection(True)
 
     def handle_work_search(self):

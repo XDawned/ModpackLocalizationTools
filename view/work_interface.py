@@ -52,7 +52,7 @@ class WorkInterface(ScrollArea):
         self.middleLayout = QVBoxLayout()
 
         self.langBrowser = PivotInterface(self.data)
-        self.langBrowser.setMinimumHeight(820)
+        self.langBrowser.setMinimumHeight(920)
 
         self.progressBar = ProgressBar()
         self.progressBar.setValue(0)
