@@ -118,8 +118,9 @@ def get_if_folder_exists(directory, target_folder):
     return None
 
 
-def encode_to_MD5(filepath):
+def encode_to_MD5(filepath:str):
     # 使用MD5进行文件内容摘要
+    filepath = os.path.normpath(filepath)
     file_data = open(filepath, 'rb').read()
     mixed_file_data = bytes(filepath, encoding='utf-8') + file_data  # 防止内容相同引起的混淆
     identifier = hashlib.md5(mixed_file_data).hexdigest()
@@ -164,11 +165,12 @@ class Lang:
 
     def set_lang(self, data: dict, file_path: str):
         self.__init__()
+        self.file_path = file_path
         self.lang_dic = data
-        self.init_cache(file_path)
+        self.init_cache()
         self.init_bilingual()
 
-    def init_cache(self, file_path: str = None):
+    def init_cache(self):
         """
         初始化缓存文件
         有则加载，无则创建
@@ -178,8 +180,7 @@ class Lang:
             raise Exception("缓存文件MD5路径生成错误,缺少文件地址")
         self.cache_name = encode_to_MD5(self.file_path) + '.json'
         self.cache_file_path = self.cache_folder + '/' + self.cache_name
-        if not os.path.exists(self.cache_folder):
-            os.mkdir(self.cache_folder)
+        os.makedirs(self.cache_folder, exist_ok=True)
         if os.path.exists(self.cache_file_path):
             self.cache_dic = parse_json_file(self.cache_file_path)
         else:
