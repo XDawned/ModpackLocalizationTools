@@ -9,7 +9,6 @@ from qfluentwidgets.components.settings.folder_list_setting_card import FolderIt
 
 
 class FolderListCard(ExpandSettingCard):
-    # FIXME 修复下拉框展开不响应问题
     def __init__(self, title: str, content: str = None, folders=None, parent=None):
         super().__init__(FIF.FOLDER, title, content, parent)
         if folders is None:
@@ -26,7 +25,6 @@ class FolderListCard(ExpandSettingCard):
             self.__addFolderItem(folder)
 
     def updateFolder(self, folders):
-        # FIXME 修复下拉框展开不响应问题
         self.__removeAllFolderWidget()
         self.folders = folders.copy()
         for folder in self.folders:
@@ -38,6 +36,7 @@ class FolderListCard(ExpandSettingCard):
         item = FolderItem(folder, self.view)
         item.removed.connect(self.__showConfirmDialog)
         self.viewLayout.addWidget(item)
+        item.show()
         self._adjustViewSize()
 
     def __showConfirmDialog(self, item: FolderItem):
@@ -55,6 +54,7 @@ class FolderListCard(ExpandSettingCard):
             return
         self.folders.remove(item.folder)
         self.viewLayout.removeWidget(item)
+        item.deleteLater()
         self._adjustViewSize()
 
     def __removeAllFolderWidget(self):
